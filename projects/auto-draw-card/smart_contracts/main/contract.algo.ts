@@ -205,6 +205,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    */
   public cardAssetOptIn(card: Account, asset: Asset): void {
     this.onlyPartner()
+    assert(this.cards(card).exists, 'CARD_NOT_FOUND')
 
     itxn
       .assetTransfer({
@@ -403,6 +404,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    */
   public cardClose(card: Account): void {
     assert(this.isPartner() || this.isCardOwner(card), 'SENDER_NOT_ALLOWED')
+    assert(this.cards(card).exists, 'CARD_NOT_FOUND')
 
     // Close the card account back to the contract, returning its balance to the
     // owner-funded pool. Deleting the box releases its MBR back to the contract too.
@@ -536,6 +538,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    */
   public cardDisableAsset(card: Account, asset: Asset): void {
     assert(this.isPartner() || this.isCardOwner(card), 'SENDER_NOT_ALLOWED')
+    assert(this.cards(card).exists, 'CARD_NOT_FOUND')
 
     this.cardAssetCloseOut(card, asset)
   }
@@ -593,6 +596,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     const withdrawal = clone(this.withdrawals(Txn.sender).value)
     assert(amount <= withdrawal.amount, 'AMOUNT_INVALID')
     assert(cardData.withdrawalNonce === withdrawal.nonce, 'NONCE_INVALID')
+    assert(withdrawal.card === card, 'CARD_MISMATCH')
 
     const releaseTime: uint64 = withdrawal.createdAt + this.withdrawal_wait_time.value
     assert(Global.latestTimestamp >= releaseTime, 'WITHDRAWAL_TIME_INVALID')
