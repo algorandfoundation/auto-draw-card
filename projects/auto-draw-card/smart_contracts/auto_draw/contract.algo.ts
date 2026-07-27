@@ -63,6 +63,10 @@ function autoDrawAsserts(txnAutoDraw: gtxn.AssetTransferTxn) {
   // entire remaining balance of the asset to a third party as a side effect of
   // the transfer. Only the explicit assetAmount may move.
   assert(txnAutoDraw.assetCloseTo === Global.zeroAddress, 'ASSET_CLOSE_NOT_ALLOWED')
+  // Block clawback: in the event that the delegated account is the clawback
+  // authority for an asset, setting assetSender would allow withdrawing from
+  // any account holding the asset, not just the delegated one.
+  assert(txnAutoDraw.assetSender === Global.zeroAddress, 'CLAWBACK_NOT_ALLOWED')
   // Pin to one network: the genesis hash is baked in at compile time via the
   // template variable, so a signature valid on (e.g.) TestNet cannot be replayed
   // against the same account on MainNet or any other chain.
