@@ -93,6 +93,7 @@ export class Killswitch extends classes(Ownable, Pausable, Recoverable) {
   public enable(card: Account, asset: Asset): void {
     const key = [Txn.sender, asset] as AccountAssetKey
     assert(!this.accountAssetPairs(key).exists, 'ALREADY_ENABLED')
+    assert(card.isOptedIn(asset), 'ASSET_NOT_ALLOWED')
 
     const cardData = arc4.abiCall<typeof Main.prototype.getCardData>({
       appId: this.main_app.value,
