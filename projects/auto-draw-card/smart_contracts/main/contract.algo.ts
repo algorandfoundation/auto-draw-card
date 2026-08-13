@@ -74,6 +74,12 @@ type CardAssetDisabled = {
   asset: Asset
 }
 
+type CardRecovered = {
+  card: Account
+  oldCardOwner: Account
+  newCardOwner: Account
+}
+
 type Debit = {
   card: Account
   asset: Asset
@@ -237,6 +243,29 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
       card: card,
       asset: asset,
     })
+  }
+
+  /**
+   * Clear the pending withdrawal request held by `owner`, but only when it targets `card`.
+   *
+   * The request box is keyed by the requesting account rather than by the card, so a holder with
+   * several cards has a single request slot covering all of them. A request against a *different*
+   * card is still perfectly valid and must be left alone.
+   *
+   * Once a card changes hands or is closed, the previous holder can neither complete nor cancel
+   * their request — both paths go through `onlyCardOwner`, which now fails — so the box would be
+   * orphaned and its MBR locked away permanently. Clearing it here releases that MBR back to the
+   * contract and leaves the new holder a clean slot.
+   *
+   * @param owner Account whose request box is being cleared
+   * @param card Card the request must reference to be cleared
+   */
+  private clearWithdrawalRequest(owner: Account, card: Account): void {
+    if (this.withdrawals(owner).exists && this.withdrawals(owner).value.card === card) {
+      const withdrawal = clone(this.withdrawals(owner).value)
+      this.withdrawals(owner).delete()
+      emit<WithdrawalRequestCancelled>(withdrawal)
+    }
   }
 
   private withdrawFunds(
@@ -406,6 +435,10 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     assert(this.isPartner() || this.isCardOwner(card), 'SENDER_NOT_ALLOWED')
     assert(this.cards(card).exists, 'CARD_NOT_FOUND')
 
+    // Drop any pending request the holder had against this card before the card box goes away,
+    // otherwise the request box outlives the card it points at and can never be cleaned up.
+    this.clearWithdrawalRequest(this.cards(card).value.owner, card)
+
     // Close the card account back to the contract, returning its balance to the
     // owner-funded pool. Deleting the box releases its MBR back to the contract too.
     itxn
@@ -433,8 +466,21 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    */
   public cardRecover(card: Account, newCardHolder: Account): void {
     this.onlyOwner()
+    assert(this.cards(card).exists, 'CARD_NOT_FOUND')
+
+    const oldCardHolder = this.cards(card).value.owner
+
+    // A request created by the previous holder must not survive the hand-over: it is keyed by
+    // their account, so the new holder can neither complete nor cancel it.
+    this.clearWithdrawalRequest(oldCardHolder, card)
 
     this.cards(card).value.owner = newCardHolder
+
+    emit<CardRecovered>({
+      card: card,
+      oldCardOwner: oldCardHolder,
+      newCardOwner: newCardHolder,
+    })
   }
 
   /**

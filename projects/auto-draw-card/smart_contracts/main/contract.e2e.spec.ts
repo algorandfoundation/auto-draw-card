@@ -465,8 +465,53 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
+   * Negative case for the card-existence guard in `cardRecover`. Without it the owner could
+   * write an owner into a box for an address that was never a card, conjuring a card record
+   * with a zero `address` field and no matching on-chain account, and silently corrupting the
+   * active-card accounting that `destroy` relies on.
+   */
+  test('cardRecover fails for an unknown card', async () => {
+    await expect(
+      appClient.send.cardRecover({
+        args: {
+          card: circle.addr.toString(),
+          newCardHolder: user2.addr.toString(),
+        },
+        staticFee: AlgoAmount.MicroAlgos(1_000),
+      }),
+    ).rejects.toThrow('CARD_NOT_FOUND')
+  })
+
+  /**
+   * Setup for the recovery cleanup below: the outgoing holder leaves a pending withdrawal
+   * request against the card. This is the realistic shape of a recovery — a user requests a
+   * withdrawal, then loses access to the wallet that made the request.
+   */
+  test('Recovery setup: outgoing holder leaves a pending withdrawal request', async () => {
+    const result = await appClient.send.withdrawalRequest({
+      args: {
+        card: newCardAddress,
+        asset: fakeUSDC,
+        amount: 1_000_000,
+      },
+      sender: user.addr,
+    })
+
+    expect(result.return?.card).toBe(newCardAddress)
+
+    const boxes = await appClient.state.box.withdrawals.getMap()
+    expect(boxes.has(user.addr.toString())).toBe(true)
+  })
+
+  /**
    * Owner-driven account recovery: reassigns an existing card to a new card holder. Used
    * when a user loses access to their wallet but should retain control of the card's funds.
+   *
+   * The pending request left by the previous holder must not survive the hand-over. Its box is
+   * keyed by the *requesting account*, so after the owner changes neither party can reach it:
+   * `withdraw` and `withdrawalCancel` both go through `onlyCardOwner`, which now rejects the old
+   * holder, and the new holder cannot address a box keyed by someone else. Left in place it is a
+   * permanently orphaned box with its MBR locked away, so `cardRecover` clears it.
    */
   test('Recover Card', async () => {
     const result = await appClient.send.cardRecover({
@@ -478,6 +523,27 @@ describe('Auto-Draw Card', () => {
     })
 
     expect(result.confirmation.poolError).toBe('')
+
+    // Ownership moved.
+    const cardData = await appClient.send.getCardData({
+      args: { card: newCardAddress },
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(cardData.return?.owner).toBe(user2.addr.toString())
+
+    // The outgoing holder's request box is gone.
+    const boxes = await appClient.state.box.withdrawals.getMap()
+    expect(boxes.has(user.addr.toString())).toBe(false)
+
+    // CardRecovered was emitted, carrying card / old owner / new owner. Matched on the payload
+    // rather than the ARC-28 selector so the assertion does not depend on re-deriving the hash.
+    const payload = Buffer.concat([
+      algosdk.decodeAddress(newCardAddress).publicKey,
+      user.addr.publicKey,
+      user2.addr.publicKey,
+    ])
+    const emitted = (result.confirmation.logs ?? []).some((log) => Buffer.from(log).subarray(4).equals(payload))
+    expect(emitted).toBe(true)
   })
 
   /**
@@ -1156,12 +1222,16 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Teardown for the binding cards. Card B still holds its funding, so it needs its own
-   * request/withdraw round before the asset can be closed out — an ASA holding cannot be closed
-   * while it carries a balance, and a card cannot be closed while opted into an asset.
+   * The other half of the recovery cleanup: `cardRecover` must clear only a request that targets
+   * the card being recovered. Because the request box is keyed by the holder rather than by the
+   * card, a holder with two cards has one slot, and a blanket delete on recovery of card A would
+   * silently destroy a perfectly valid request against card B.
+   *
+   * Card A is handed to `user2` and immediately handed back, so the rest of the teardown can
+   * still act as `user`.
    */
-  test('Withdrawal binding: drain and close both cards', async () => {
-    const drain = await appClient.send.withdrawalRequest({
+  test('Withdrawal binding: cardRecover leaves a request against another card alone', async () => {
+    const pending = await appClient.send.withdrawalRequest({
       args: {
         card: bindingCardB,
         asset: fakeUSDC,
@@ -1169,26 +1239,76 @@ describe('Auto-Draw Card', () => {
       },
       sender: user.addr,
     })
+    expect(pending.return?.card).toBe(bindingCardB)
 
+    await appClient.send.cardRecover({
+      args: { card: bindingCardA, newCardHolder: user2.addr.toString() },
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+
+    // The request survived the recovery of the unrelated card, unchanged.
+    const boxes = await appClient.state.box.withdrawals.getMap()
+    expect(boxes.get(user.addr.toString())?.card).toBe(bindingCardB)
+    expect(boxes.get(user.addr.toString())?.amount).toEqual(BINDING_FUND_AMOUNT)
+
+    // Hand card A back so the teardown below can close it as its holder.
+    await appClient.send.cardRecover({
+      args: { card: bindingCardA, newCardHolder: user.addr.toString() },
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+  })
+
+  /**
+   * `cardClose` performs the same cleanup for the same reason: once the card box is deleted, a
+   * request pointing at it can never be completed or cancelled, because both paths call
+   * `onlyCardOwner` and that now fails with CARD_NOT_FOUND. The request is created after the card
+   * is drained (amount 0, which is all the balance allows) purely to have a live box at close
+   * time.
+   */
+  test('Withdrawal binding: cardClose clears a pending request for the closed card', async () => {
+    // Drain card B using the request left pending by the previous test.
     await appClient.send.withdraw({
-      args: { card: bindingCardB, amount: drain.return!.amount },
+      args: { card: bindingCardB, amount: BINDING_FUND_AMOUNT },
       sender: user.addr,
       staticFee: AlgoAmount.MicroAlgos(2_000),
     })
 
-    for (const card of [bindingCardA, bindingCardB]) {
-      await appClient.send.cardDisableAsset({
-        args: { card, asset: fakeUSDC },
-        sender: user.addr,
-        staticFee: AlgoAmount.MicroAlgos(2_000),
-      })
+    await appClient.send.withdrawalRequest({
+      args: { card: bindingCardB, asset: fakeUSDC, amount: 0 },
+      sender: user.addr,
+    })
+    expect((await appClient.state.box.withdrawals.getMap()).has(user.addr.toString())).toBe(true)
 
-      const closed = await appClient.send.cardClose({
-        args: { card },
-        staticFee: AlgoAmount.MicroAlgos(2_000),
-      })
-      expect(closed.confirmation.poolError).toBe('')
-    }
+    await appClient.send.cardDisableAsset({
+      args: { card: bindingCardB, asset: fakeUSDC },
+      sender: user.addr,
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+    const closed = await appClient.send.cardClose({
+      args: { card: bindingCardB },
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+    expect(closed.confirmation.poolError).toBe('')
+
+    expect((await appClient.state.box.withdrawals.getMap()).has(user.addr.toString())).toBe(false)
+  })
+
+  /**
+   * Teardown for the remaining binding card. Card B was already drained and closed above, so only
+   * card A is left — its asset must be closed out before the account itself can be closed.
+   */
+  test('Withdrawal binding: close the remaining card', async () => {
+    await appClient.send.cardDisableAsset({
+      args: { card: bindingCardA, asset: fakeUSDC },
+      sender: user.addr,
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+
+    const closed = await appClient.send.cardClose({
+      args: { card: bindingCardA },
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+    expect(closed.confirmation.poolError).toBe('')
 
     expect(await appClient.state.global.cardsActiveCount()).toEqual(0n)
   })
