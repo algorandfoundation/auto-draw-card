@@ -169,6 +169,10 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   // Omnibus address
   public omnibus_address = GlobalState<Account>({ key: 'oa' })
 
+  // Authorized withdraw operators. Presence of the box (value 1) grants the
+  // account permission to call cardDebit. MBR is released on removal.
+  public withdraw_operators = BoxMap<Account, uint64>({ keyPrefix: 'wop' })
+
   // ========== Internal Utils ==========
   /**
    * Check if the current transaction sender is the card holder/owner
@@ -201,6 +205,13 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    */
   private onlyPartner(): void {
     assert(this.isPartner(), 'SENDER_NOT_ALLOWED')
+  }
+
+  /**
+   * Assert the transaction sender is an authorized withdraw operator.
+   */
+  private onlyWithdrawOperator(): void {
+    assert(this.withdraw_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
   }
 
   /**
@@ -253,7 +264,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    * card is still perfectly valid and must be left alone.
    *
    * Once a card changes hands or is closed, the previous holder can neither complete nor cancel
-   * their request — both paths go through `onlyCardOwner`, which now fails — so the box would be
+   * their request — both paths go through `onlyCardOwner`, which fails — so the box would be
    * orphaned and its MBR locked away permanently. Clearing it here releases that MBR back to the
    * contract and leaves the new holder a clean slot.
    *
@@ -485,7 +496,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
 
   /**
    * Debits the specified amount of the given asset from the card account.
-   * Only the owner of the contract can perform this operation.
+   * Only a withdraw operator can perform this operation.
    *
    * The AutoDraw lsig binds `card` and `cardOwner` to the axfer receiver, so verifying here that
    * `cardOwner` owns `card` prevents the delegated draw from funding (and subsequently
@@ -497,7 +508,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    */
   public cardDebit(cardOwner: Account, card: Account, asset: Asset, amount: uint64, nonce: uint64, ref: string): void {
     this.whenNotPaused()
-    this.onlyOwner()
+    this.onlyWithdrawOperator()
 
     // Ensure card and owner align
     assert(this.cards(card).value.owner === cardOwner, 'OWNER_INVALID')
@@ -572,6 +583,30 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     this.onlyOwner()
 
     this.omnibus_address.value = newOmnibusAddress
+  }
+
+  /**
+   * Authorize an account as a withdraw operator, allowing it to call cardDebit.
+   * Only the owner of the contract can call this method.
+   *
+   * @param operator The account to authorize.
+   */
+  public addWithdrawOperator(operator: Account): void {
+    this.onlyOwner()
+
+    this.withdraw_operators(operator).value = 1
+  }
+
+  /**
+   * Revoke a withdraw operator. Deleting the box releases its MBR back to the
+   * contract. Only the owner of the contract can call this method.
+   *
+   * @param operator The account to revoke.
+   */
+  public removeWithdrawOperator(operator: Account): void {
+    this.onlyOwner()
+
+    this.withdraw_operators(operator).delete()
   }
 
   // ===== Card Holder Methods =====

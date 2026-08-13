@@ -41,6 +41,13 @@ describe('Auto-Draw Card', () => {
   let user2: algosdk.Account & algosdk.Address
   let withdrawalAcc: algosdk.Account & algosdk.Address
   let omnibus: algosdk.Account & algosdk.Address
+  // Account authorized via `addWithdrawOperator` to call `cardDebit`. Deliberately not the
+  // contract owner, so every debit below proves the gate is the operator box and not ownership.
+  let withdrawOperator: algosdk.Account & algosdk.Address
+
+  // MBR the app account locks up per withdraw-operator box:
+  // 2500 + 400 * (keyPrefix 'wop' (3) + address (32) + uint64 value (8)) = 19_700
+  const WITHDRAW_OPERATOR_BOX_MBR = 19_700n
 
   let fakeUSDC: bigint
   let newCardAddress: string
@@ -63,8 +70,9 @@ describe('Auto-Draw Card', () => {
     Config.configure({ populateAppCallResources: true })
     const { algorand, generateAccount } = fixture.context
 
-    ;[owner, user, user2, circle, withdrawalAcc, omnibus] = await Promise.all([
+    ;[owner, user, user2, circle, withdrawalAcc, omnibus, withdrawOperator] = await Promise.all([
       generateAccount({ initialFunds: AlgoAmount.Algos(100) }),
+      generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
       generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
       generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
       generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
@@ -174,6 +182,22 @@ describe('Auto-Draw Card', () => {
         sender: user2.addr,
       }),
     ).rejects.toThrow()
+  })
+
+  /**
+   * Negative case for the withdraw-operator registry: authorizing an account to debit cards is
+   * the most powerful grant the contract makes, so only the owner may make it. A non-owner
+   * self-authorizing is rejected by the Ownable guard before any box is written.
+   */
+  test('addWithdrawOperator fails for non-owner', async () => {
+    await expect(
+      appClient.send.addWithdrawOperator({
+        args: { operator: user2.addr.toString() },
+        sender: user2.addr,
+      }),
+    ).rejects.toThrow()
+
+    expect((await appClient.state.box.withdrawOperators.getMap()).has(user2.addr.toString())).toBe(false)
   })
 
   /**
@@ -385,11 +409,88 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Simulates the core spend flow: the user has spent on their card, and Partner debits the
-   * card for the matching FakeUSDC amount. The current nonce is fetched first and passed in
-   * for replay protection; the ref carries the off-chain transaction identifier.
+   * `cardDebit` is gated on the `withdraw_operators` box rather than on contract ownership, so
+   * with an empty registry *nobody* can debit — not the owner, who is also the partner, and not
+   * the card holder. Running this before the first authorization is what proves the gate is the
+   * box: an ownership-based gate would let this call through and drain the card.
    */
-  test('User spends, Partner debits', async () => {
+  test('cardDebit fails before any withdraw operator is authorized', async () => {
+    const nextNonce = await appClient.send.getNextCardNonce({
+      args: { card: newCardAddress },
+    })
+
+    await expect(
+      appClient.send.cardDebit({
+        args: {
+          cardOwner: user.addr.toString(),
+          card: newCardAddress,
+          asset: fakeUSDC,
+          amount: 1_000_000,
+          nonce: nextNonce.return!,
+          ref: 'Test Transaction REF-UNAUTHORIZED',
+        },
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+  })
+
+  /**
+   * The owner authorizes a dedicated debit-processing account. The box value is a marker (1) —
+   * only its presence matters — and creating it locks the box MBR out of the app account's
+   * balance, which the assertion on `minBalance` pins down so the release on removal can be
+   * checked against it later.
+   */
+  test('Authorize a withdraw operator', async () => {
+    const { algorand } = fixture.context
+
+    const before = await algorand.account.getInformation(appClient.appAddress)
+
+    const result = await appClient.send.addWithdrawOperator({
+      args: { operator: withdrawOperator.addr.toString() },
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    const operators = await appClient.state.box.withdrawOperators.getMap()
+    expect(operators.get(withdrawOperator.addr.toString())).toEqual(1n)
+
+    const after = await algorand.account.getInformation(appClient.appAddress)
+    expect(after.minBalance.microAlgos - before.minBalance.microAlgos).toEqual(WITHDRAW_OPERATOR_BOX_MBR)
+  })
+
+  /**
+   * Authorization is per-account, not a blanket switch: with one operator registered, an
+   * account outside the registry is still refused. Guards against a box-existence check that
+   * accidentally passes for any key (e.g. reading a default value instead of `.exists`).
+   */
+  test('cardDebit fails for an account outside the operator registry', async () => {
+    const nextNonce = await appClient.send.getNextCardNonce({
+      args: { card: newCardAddress },
+    })
+
+    await expect(
+      appClient.send.cardDebit({
+        args: {
+          cardOwner: user.addr.toString(),
+          card: newCardAddress,
+          asset: fakeUSDC,
+          amount: 1_000_000,
+          nonce: nextNonce.return!,
+          ref: 'Test Transaction REF-NOT-OPERATOR',
+        },
+        sender: user2.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+  })
+
+  /**
+   * Simulates the core spend flow: the user has spent on their card, and the authorized
+   * withdraw operator debits the card for the matching FakeUSDC amount. The current nonce is
+   * fetched first and passed in for replay protection; the ref carries the off-chain
+   * transaction identifier. The sender holds no privileged role beyond its operator box, so a
+   * success here also proves the grant works without ownership or partnership.
+   */
+  test('User spends, withdraw operator debits', async () => {
     const nextNonce = await appClient.send.getNextCardNonce({
       args: { card: newCardAddress },
     })
@@ -403,6 +504,7 @@ describe('Auto-Draw Card', () => {
         nonce: nextNonce.return!,
         ref: 'Test Transaction REF-1234567890',
       },
+      sender: withdrawOperator.addr,
       staticFee: AlgoAmount.MicroAlgos(2_000),
     })
 
@@ -410,10 +512,11 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Negative case for the ownership guard that now lives in `cardDebit`: passing a `cardOwner`
-   * that does not match the card's stored owner reverts with OWNER_INVALID. This is the check
-   * that prevents an AutoDraw group from funding and debiting a card the delegating account
-   * does not own; it was moved here from `Killswitch.authorize`.
+   * Negative case for the card-ownership guard in `cardDebit`: passing a `cardOwner` that does
+   * not match the card's stored owner reverts with OWNER_INVALID. This is the check that
+   * prevents an AutoDraw group from funding and debiting a card the delegating account does not
+   * own. Sent by the authorized operator so the call gets past `onlyWithdrawOperator` and
+   * actually reaches this assert.
    */
   test('cardDebit fails when cardOwner does not own the card', async () => {
     const nextNonce = await appClient.send.getNextCardNonce({
@@ -430,6 +533,7 @@ describe('Auto-Draw Card', () => {
           nonce: nextNonce.return!,
           ref: 'Test Transaction REF-OWNER',
         },
+        sender: withdrawOperator.addr,
         staticFee: AlgoAmount.MicroAlgos(2_000),
       }),
     ).rejects.toThrow('OWNER_INVALID')
@@ -509,8 +613,9 @@ describe('Auto-Draw Card', () => {
    *
    * The pending request left by the previous holder must not survive the hand-over. Its box is
    * keyed by the *requesting account*, so after the owner changes neither party can reach it:
-   * `withdraw` and `withdrawalCancel` both go through `onlyCardOwner`, which now rejects the old
-   * holder, and the new holder cannot address a box keyed by someone else. Left in place it is a
+   * `withdraw` and `withdrawalCancel` both go through `onlyCardOwner`, which rejects the old
+   * holder once the card is reassigned, and the new holder cannot address a box keyed by someone
+   * else. Left in place it is a
    * permanently orphaned box with its MBR locked away, so `cardRecover` clears it.
    */
   test('Recover Card', async () => {
@@ -599,7 +704,7 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Creates a fresh withdrawal request now that the timeout is non-zero. This request can
+   * Creates a fresh withdrawal request while the timeout is non-zero. This request can
    * NOT be completed via the normal `withdraw` path until the timeout elapses, setting up
    * the permissioned withdrawal scenario below.
    */
@@ -685,7 +790,7 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Closes the now asset-free card and reclaims its minimum balance, completing the full
+   * Closes the asset-free card and reclaims its minimum balance, completing the full
    * lifecycle (create → fund → debit → recover → withdraw → disable asset → close) for the
    * primary FakeUSDC card.
    */
@@ -860,10 +965,9 @@ describe('Auto-Draw Card', () => {
   /**
    * Builds the AutoDraw delegated logic signature. The TEAL template is hydrated with the
    * concrete killswitch app id, main app id, and genesis hash, compiled, then signed by
-   * the user so it acts as a delegated approval. The lsig no longer pins an asset id
-   * itself — the transferred asset is bound to the per-(account, asset) killswitch
-   * delegation via `authorize`'s asset argument, which is what makes delegating it to
-   * Partner safe.
+   * the user so it acts as a delegated approval. The lsig does not pin an asset id itself —
+   * the transferred asset is bound to the per-(account, asset) killswitch delegation via
+   * `authorize`'s asset argument, which is what makes delegating it to Partner safe.
    */
   test('AutoDraw: compile lsig and user signs for delegation', async () => {
     const { algorand } = fixture.context
@@ -921,7 +1025,7 @@ describe('Auto-Draw Card', () => {
         staticFee: AlgoAmount.MicroAlgos(1_000),
       }),
     )
-    // [2] cardDebit: inner txn card→Main now sees the card funded by [0]
+    // [2] cardDebit: inner txn card→Main sees the card funded by [0]
     composer.addAppCallMethodCall(
       await appClient.params.cardDebit({
         args: {
@@ -932,6 +1036,7 @@ describe('Auto-Draw Card', () => {
           nonce: nonceResult.return!,
           ref: 'AutoDraw Test REF-001',
         },
+        sender: withdrawOperator.addr,
         staticFee: AlgoAmount.MicroAlgos(3_000),
       }),
     )
@@ -941,7 +1046,7 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Confirms the delegated debit advanced replay-protection state: the card nonce is now 1
+   * Confirms the delegated debit advanced replay-protection state: the card nonce reads 1
    * after the single successful AutoDraw group.
    */
   test('AutoDraw: card nonce incremented after debit', async () => {
@@ -994,6 +1099,7 @@ describe('Auto-Draw Card', () => {
           nonce: nonceResult.return!,
           ref: 'AutoDraw Test REF-002',
         },
+        sender: withdrawOperator.addr,
         staticFee: AlgoAmount.MicroAlgos(3_000),
       }),
     )
@@ -1049,6 +1155,7 @@ describe('Auto-Draw Card', () => {
           nonce: nonceResult.return!,
           ref: 'AutoDraw Test REF-003',
         },
+        sender: withdrawOperator.addr,
         staticFee: AlgoAmount.MicroAlgos(3_000),
       }),
     )
@@ -1056,6 +1163,100 @@ describe('Auto-Draw Card', () => {
     await expect(composer.send()).rejects.toThrow()
 
     await ksClient.send.unpause({ args: [] })
+  })
+
+  // ========== Withdraw operator revocation ==========
+
+  /**
+   * Revocation is as privileged as authorization: an operator that could revoke itself — or
+   * revoke a peer — could disrupt debit processing, so `removeWithdrawOperator` is owner-only.
+   * The operator attempts to remove itself and is rejected, leaving its box intact.
+   */
+  test('removeWithdrawOperator fails for non-owner', async () => {
+    await expect(
+      appClient.send.removeWithdrawOperator({
+        args: { operator: withdrawOperator.addr.toString() },
+        sender: withdrawOperator.addr,
+      }),
+    ).rejects.toThrow()
+
+    expect((await appClient.state.box.withdrawOperators.getMap()).has(withdrawOperator.addr.toString())).toBe(true)
+  })
+
+  /**
+   * The owner revokes the operator: the box is deleted, its MBR returns to the app account's
+   * free balance, and a debit from the revoked account is refused with SENDER_NOT_ALLOWED. The
+   * probe debits 0 so the only thing that can reject it is the operator gate.
+   */
+  test('removeWithdrawOperator revokes debit access and releases the box MBR', async () => {
+    const { algorand } = fixture.context
+
+    const before = await algorand.account.getInformation(appClient.appAddress)
+
+    const result = await appClient.send.removeWithdrawOperator({
+      args: { operator: withdrawOperator.addr.toString() },
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    expect((await appClient.state.box.withdrawOperators.getMap()).has(withdrawOperator.addr.toString())).toBe(false)
+
+    const after = await algorand.account.getInformation(appClient.appAddress)
+    expect(before.minBalance.microAlgos - after.minBalance.microAlgos).toEqual(WITHDRAW_OPERATOR_BOX_MBR)
+
+    const nonceResult = await appClient.send.getNextCardNonce({
+      args: { card: autoDrawCardAddress },
+    })
+
+    await expect(
+      appClient.send.cardDebit({
+        args: {
+          cardOwner: user.addr.toString(),
+          card: autoDrawCardAddress,
+          asset: fakeUSDC,
+          amount: 0,
+          nonce: nonceResult.return!,
+          ref: 'AutoDraw Test REF-REVOKED',
+        },
+        sender: withdrawOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+  })
+
+  /**
+   * Positive control for the revocation above, and proof the registry is re-grantable: the
+   * owner authorizes the same account again and the identical zero-amount debit succeeds, so
+   * the rejection above can only have come from the missing operator box. The operator is
+   * revoked again at the end, both to leave the registry empty for `destroy` and to confirm
+   * the add/remove cycle is repeatable on the same key.
+   */
+  test('Re-authorizing a revoked operator restores debit access', async () => {
+    await appClient.send.addWithdrawOperator({
+      args: { operator: withdrawOperator.addr.toString() },
+    })
+
+    const nonceResult = await appClient.send.getNextCardNonce({
+      args: { card: autoDrawCardAddress },
+    })
+
+    const debit = await appClient.send.cardDebit({
+      args: {
+        cardOwner: user.addr.toString(),
+        card: autoDrawCardAddress,
+        asset: fakeUSDC,
+        amount: 0,
+        nonce: nonceResult.return!,
+        ref: 'AutoDraw Test REF-REAUTHORIZED',
+      },
+      sender: withdrawOperator.addr,
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+    expect(debit.confirmation.poolError).toBe('')
+
+    await appClient.send.removeWithdrawOperator({
+      args: { operator: withdrawOperator.addr.toString() },
+    })
+    expect((await appClient.state.box.withdrawOperators.getMap()).has(withdrawOperator.addr.toString())).toBe(false)
   })
 
   /**
@@ -1261,7 +1462,7 @@ describe('Auto-Draw Card', () => {
   /**
    * `cardClose` performs the same cleanup for the same reason: once the card box is deleted, a
    * request pointing at it can never be completed or cancelled, because both paths call
-   * `onlyCardOwner` and that now fails with CARD_NOT_FOUND. The request is created after the card
+   * `onlyCardOwner`, which fails with CARD_NOT_FOUND. The request is created after the card
    * is drained (amount 0, which is all the balance allows) purely to have a live box at close
    * time.
    */
