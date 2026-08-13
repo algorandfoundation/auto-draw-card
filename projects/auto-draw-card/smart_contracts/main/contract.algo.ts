@@ -377,16 +377,16 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
       })
       .submit()
 
-    // Opt-in to the asset if provided
-    if (asset.id) {
-      this.cardAssetOptIn(cardAddr, asset)
-    }
-
     // Store new card along with Card Holder
     this.cards(cardAddr).value = clone(cardData)
 
     // Increment active cards
     this.cards_active_count.value = this.cards_active_count.value + 1
+
+    // Opt-in to the asset if provided
+    if (asset.id) {
+      this.cardAssetOptIn(cardAddr, asset)
+    }
 
     emit<CardCreated>({
       cardOwner: cardOwner,

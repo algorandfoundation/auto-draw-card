@@ -12,7 +12,7 @@
     "lint:fix": "eslint smart_contracts --fix",
     "audit": "better-npm-audit audit",
     "format": "prettier --write .",
-    "test": "vitest run",
+    "test": "pnpm build && vitest run",
     "test:watch": "vitest watch",
     "check-types": "tsc --noEmit"
   },

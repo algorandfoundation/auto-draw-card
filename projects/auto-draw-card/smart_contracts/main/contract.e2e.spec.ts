@@ -51,6 +51,13 @@ describe('Auto-Draw Card', () => {
   let autoDrawLsig: algosdk.LogicSigAccount
   const AUTO_DRAW_DEBIT_AMOUNT = 5_000_000n
 
+  // Withdrawal card-binding state: two cards owned by the same holder, needed because the
+  // withdrawal request box is keyed by sender rather than by card.
+  let bindingCardA: string
+  let bindingCardB: string
+  let bindingRequest: WithdrawalRequest
+  const BINDING_FUND_AMOUNT = 4_000_000n
+
   beforeAll(async () => {
     await fixture.newScope()
     Config.configure({ populateAppCallResources: true })
@@ -277,11 +284,40 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
+   * Negative case for the card-existence guard in `cardAssetOptIn`: the partner cannot opt an
+   * address that has no card box into an asset, because there would be no card to fund the
+   * opt-in MBR or to authorize the inner transfer. Pins the guard so it cannot be dropped to
+   * make the ordering test below pass.
+   */
+  test('cardAssetOptIn fails for an unknown card', async () => {
+    await expect(
+      appClient.send.cardAssetOptIn({
+        args: {
+          card: user2.addr.toString(),
+          asset: fakeUSDC,
+        },
+        sender: owner.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('CARD_NOT_FOUND')
+  })
+
+  /**
    * Creates a card and opts it into FakeUSDC in a single call. The returned address is
    * reused throughout the main spend/withdraw flow below, so this card is the primary
    * subject of the asset-bearing tests.
+   *
+   * This is also the ordering regression test for `cardCreate`: `cardAssetOptIn` asserts the
+   * card box exists, so the box write and the active-card increment must happen *before* the
+   * opt-in. If the opt-in is hoisted above the box write, the whole call reverts with
+   * CARD_NOT_FOUND and every assertion here fails. The holding and counter checks are what
+   * make the ordering observable rather than merely implied by the call not throwing.
    */
   test('Create new card with FakeUSDC', async () => {
+    const { algorand } = fixture.context
+
+    const activeBefore = await appClient.state.global.cardsActiveCount()
+
     const result = await appClient.send.cardCreate({
       args: {
         cardOwner: user.addr.toString(),
@@ -293,6 +329,41 @@ describe('Auto-Draw Card', () => {
     expect(result.return).toBeDefined()
 
     newCardAddress = result.return!
+
+    // The card box was written, with the generated address stored back into it.
+    const cardData = await appClient.send.getCardData({
+      args: { card: newCardAddress },
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(cardData.return?.owner).toBe(user.addr.toString())
+    expect(cardData.return?.address).toBe(newCardAddress)
+
+    // The active-card counter was incremented.
+    expect(await appClient.state.global.cardsActiveCount()).toEqual(activeBefore! + 1n)
+
+    // The card really is opted into the asset: a zero-balance holding exists. This throws if
+    // the opt-in inner transaction never ran.
+    const holding = await algorand.asset.getAccountInformation(newCardAddress, fakeUSDC)
+    expect(holding.balance).toEqual(0n)
+  })
+
+  /**
+   * Happy path for the `cardAssetOptIn` guard, called directly rather than through
+   * `cardCreate`. Re-opting an already-opted-in card into the same asset is a no-op axfer that
+   * costs no extra MBR, so this isolates "the card box exists, therefore the guard passes"
+   * from the asset bookkeeping.
+   */
+  test('cardAssetOptIn succeeds for an existing card', async () => {
+    const result = await appClient.send.cardAssetOptIn({
+      args: {
+        card: newCardAddress,
+        asset: fakeUSDC,
+      },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+
+    expect(result.confirmation.poolError).toBe('')
   })
 
   /**
@@ -949,6 +1020,177 @@ describe('Auto-Draw Card', () => {
     })
 
     expect(result.confirmation.poolError).toBe('')
+  })
+
+  // ========== Withdrawal card-binding tests ==========
+
+  /**
+   * Setup for the CARD_MISMATCH guard. A withdrawal request lives in a box keyed by the
+   * *requesting account*, not by the card, so a holder who owns more than one card has a single
+   * request slot covering all of them. Proving the card binding therefore needs two cards owned
+   * by the same holder, both funded: if both hold the full requested amount, the only thing
+   * standing between a request against card A and a drain of card B is the assert itself.
+   *
+   * The timeout goes back to 0 for the same reason — otherwise `withdraw` would revert on
+   * WITHDRAWAL_TIME_INVALID and the test could pass without the card check ever running.
+   */
+  test('Withdrawal binding: set up two funded cards for one holder', async () => {
+    const { algorand } = fixture.context
+
+    await appClient.send.setWithdrawalTimeout({ args: { seconds: 0 } })
+
+    const [a, b] = [
+      await appClient.send.cardCreate({
+        args: { cardOwner: user.addr.toString(), asset: fakeUSDC },
+        sender: owner.addr,
+        staticFee: AlgoAmount.MicroAlgos(5_000),
+      }),
+      await appClient.send.cardCreate({
+        args: { cardOwner: user.addr.toString(), asset: fakeUSDC },
+        sender: owner.addr,
+        staticFee: AlgoAmount.MicroAlgos(5_000),
+      }),
+    ]
+
+    expect(a.return).toBeDefined()
+    expect(b.return).toBeDefined()
+
+    bindingCardA = a.return!
+    bindingCardB = b.return!
+    expect(bindingCardA).not.toBe(bindingCardB)
+
+    // Fund both cards identically so a wrong-card withdrawal would otherwise succeed.
+    for (const card of [bindingCardA, bindingCardB]) {
+      await algorand.send.assetTransfer({
+        sender: user.addr,
+        receiver: card,
+        assetId: fakeUSDC,
+        amount: BINDING_FUND_AMOUNT,
+      })
+    }
+
+    const [holdingA, holdingB] = await Promise.all([
+      algorand.asset.getAccountInformation(bindingCardA, fakeUSDC),
+      algorand.asset.getAccountInformation(bindingCardB, fakeUSDC),
+    ])
+    expect(holdingA.balance).toEqual(BINDING_FUND_AMOUNT)
+    expect(holdingB.balance).toEqual(BINDING_FUND_AMOUNT)
+  })
+
+  /**
+   * The holder requests a withdrawal against the first card. The returned request records
+   * `card`, which is the field `withdraw` later checks the passed-in card against.
+   */
+  test('Withdrawal binding: request a withdrawal against the first card', async () => {
+    const result = await appClient.send.withdrawalRequest({
+      args: {
+        card: bindingCardA,
+        asset: fakeUSDC,
+        amount: BINDING_FUND_AMOUNT,
+      },
+      sender: user.addr,
+    })
+
+    expect(result.return).toBeDefined()
+    expect(result.return?.card).toBe(bindingCardA)
+
+    bindingRequest = result.return!
+  })
+
+  /**
+   * The CARD_MISMATCH guard: the holder owns both cards and has a valid, matured request, but
+   * passes the *other* card to `withdraw`. Without the assert the request against card A would
+   * authorize draining card B — every preceding check passes, since the holder owns card B, the
+   * amount is within the request, and both cards are at withdrawal nonce 0. Card B's balance is
+   * re-checked afterward to prove nothing moved.
+   */
+  test('Withdrawal binding: withdrawing against a different card fails with CARD_MISMATCH', async () => {
+    const { algorand } = fixture.context
+
+    await expect(
+      appClient.send.withdraw({
+        args: {
+          card: bindingCardB,
+          amount: bindingRequest.amount,
+        },
+        sender: user.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('CARD_MISMATCH')
+
+    const holdingB = await algorand.asset.getAccountInformation(bindingCardB, fakeUSDC)
+    expect(holdingB.balance).toEqual(BINDING_FUND_AMOUNT)
+  })
+
+  /**
+   * Positive control for the guard: the same request, replayed against the card it was actually
+   * created for, succeeds and drains only that card. This is what keeps the test above honest —
+   * it fails on a thrown CARD_MISMATCH, not on a request that was unusable to begin with.
+   */
+  test('Withdrawal binding: withdrawing against the requested card succeeds', async () => {
+    const { algorand } = fixture.context
+
+    const result = await appClient.send.withdraw({
+      args: {
+        card: bindingCardA,
+        amount: bindingRequest.amount,
+      },
+      sender: user.addr,
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    const [holdingA, holdingB] = await Promise.all([
+      algorand.asset.getAccountInformation(bindingCardA, fakeUSDC),
+      algorand.asset.getAccountInformation(bindingCardB, fakeUSDC),
+    ])
+    expect(holdingA.balance).toEqual(0n)
+    expect(holdingB.balance).toEqual(BINDING_FUND_AMOUNT)
+
+    // The successful withdrawal advanced the card's own withdrawal nonce.
+    const cardData = await appClient.send.getCardData({
+      args: { card: bindingCardA },
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(cardData.return?.withdrawalNonce).toEqual(1n)
+  })
+
+  /**
+   * Teardown for the binding cards. Card B still holds its funding, so it needs its own
+   * request/withdraw round before the asset can be closed out — an ASA holding cannot be closed
+   * while it carries a balance, and a card cannot be closed while opted into an asset.
+   */
+  test('Withdrawal binding: drain and close both cards', async () => {
+    const drain = await appClient.send.withdrawalRequest({
+      args: {
+        card: bindingCardB,
+        asset: fakeUSDC,
+        amount: BINDING_FUND_AMOUNT,
+      },
+      sender: user.addr,
+    })
+
+    await appClient.send.withdraw({
+      args: { card: bindingCardB, amount: drain.return!.amount },
+      sender: user.addr,
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+
+    for (const card of [bindingCardA, bindingCardB]) {
+      await appClient.send.cardDisableAsset({
+        args: { card, asset: fakeUSDC },
+        sender: user.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      })
+
+      const closed = await appClient.send.cardClose({
+        args: { card },
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      })
+      expect(closed.confirmation.poolError).toBe('')
+    }
+
+    expect(await appClient.state.global.cardsActiveCount()).toEqual(0n)
   })
 
   /**
