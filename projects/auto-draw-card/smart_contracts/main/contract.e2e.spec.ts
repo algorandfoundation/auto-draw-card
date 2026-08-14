@@ -185,6 +185,38 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
+   * Registers the Killswitch app so `cardClose` can revoke the holder's AutoDraw delegations.
+   * The two contracts reference each other, so neither app id exists at the other's creation
+   * time — Main learns about the Killswitch here, after both are deployed. Until it is set,
+   * closing a card silently skips delegation cleanup, so that a deployment that does not use
+   * AutoDraw at all still has a working card lifecycle.
+   */
+  test('Register the killswitch app', async () => {
+    const result = await appClient.send.setKillswitchApp({
+      args: { newKillswitchApp: ksClient.appId },
+    })
+
+    expect(result.confirmation.poolError).toBe('')
+    expect(await appClient.state.global.killswitchApp()).toEqual(ksClient.appId)
+  })
+
+  /**
+   * The registered app id is what `cardClose` revokes against, so a caller able to rotate it
+   * could point Main at a look-alike contract and leave the real delegation untouched. Owner-only,
+   * and a non-owner attempt leaves the registration intact.
+   */
+  test('setKillswitchApp fails for non-owner', async () => {
+    await expect(
+      appClient.send.setKillswitchApp({
+        args: { newKillswitchApp: 0n },
+        sender: user2.addr,
+      }),
+    ).rejects.toThrow()
+
+    expect(await appClient.state.global.killswitchApp()).toEqual(ksClient.appId)
+  })
+
+  /**
    * Negative case for the withdraw-operator registry: authorizing an account to debit cards is
    * the most powerful grant the contract makes, so only the owner may make it. A non-owner
    * self-authorizing is rejected by the Ownable guard before any box is written.
@@ -775,6 +807,9 @@ describe('Auto-Draw Card', () => {
    * The card holder opts the card out of FakeUSDC. An ASA opt-out is required before the
    * card account can be closed, since Algorand forbids closing an account still opted into
    * an asset.
+   *
+   * The fee covers the inner `killFor` call alongside the opt-out transfer: this holder never
+   * enabled an AutoDraw delegation, but the revocation is attempted on every opt-out.
    */
   test('Disable FakeUSDC for card', async () => {
     const result = await appClient.send.cardDisableAsset({
@@ -783,7 +818,7 @@ describe('Auto-Draw Card', () => {
         asset: fakeUSDC,
       },
       sender: user2.addr,
-      staticFee: AlgoAmount.MicroAlgos(2_000),
+      staticFee: AlgoAmount.MicroAlgos(3_000),
     })
 
     expect(result.confirmation.poolError).toBe('')
@@ -921,6 +956,29 @@ describe('Auto-Draw Card', () => {
         staticFee: AlgoAmount.MicroAlgos(2_000),
       }),
     ).rejects.toThrow('ALREADY_ENABLED')
+  })
+
+  /**
+   * `killFor` takes the account to revoke as an argument instead of keying off `Txn.sender`,
+   * because Main has to be able to revoke on a holder's behalf when their card closes. That
+   * argument is only safe while the method is unreachable from outside: a direct caller could
+   * otherwise delete any holder's delegation and stop their automated draws at will. Only inner
+   * calls from the registered Main app are accepted, so a user calling it directly — even for
+   * their own account — is refused and the delegation survives.
+   */
+  test('Killswitch: killFor is refused when called directly', async () => {
+    await expect(
+      ksClient.send.killFor({
+        args: { account: user.addr.toString(), asset: fakeUSDC },
+        sender: user.addr,
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    const result = await ksClient.send.authorize({
+      args: { account: user.addr.toString(), asset: fakeUSDC },
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
   })
 
   /**
@@ -1332,25 +1390,49 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Opts the AutoDraw card out of FakeUSDC, the required precondition before the card
-   * account can be closed.
+   * Opts the AutoDraw card out of FakeUSDC — the required precondition before the card account can
+   * be closed — and with it the holder's AutoDraw delegation for that asset.
+   *
+   * The delegation lives in the Killswitch contract keyed by (holder, asset) rather than by card,
+   * so without this cleanup it would outlive every card the holder has and keep authorizing draws
+   * from their wallet. Opting out is where the revocation belongs: it is the point at which the
+   * asset can no longer be drawn into the card, and it is unavoidable, because a card cannot be
+   * closed while it still holds an ASA.
+   *
+   * The `authorize` call up front is the positive control — it proves the REFUSED below comes from
+   * this opt-out and not from a delegation that was already gone. The close runs as the holder
+   * here, but the partner path revokes just the same: an offboarding or incident-driven opt-out
+   * must not leave a live delegation behind, and revoking consent can only ever narrow what may
+   * be drawn.
+   *
+   * The extra 1_000 microAlgos over a plain opt-out covers the inner `killFor` call.
    */
-  test('AutoDraw: disable FakeUSDC for card', async () => {
+  test('AutoDraw: disable FakeUSDC for card revokes the holder delegation', async () => {
+    const authorized = await ksClient.send.authorize({
+      args: { account: user.addr.toString(), asset: fakeUSDC },
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(authorized.confirmation.poolError).toBe('')
+
     const result = await appClient.send.cardDisableAsset({
       args: {
         card: autoDrawCardAddress,
         asset: fakeUSDC,
       },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(2_000),
+      staticFee: AlgoAmount.MicroAlgos(3_000),
     })
 
     expect(result.confirmation.poolError).toBe('')
+
+    await expect(ksClient.send.authorize({ args: { account: user.addr.toString(), asset: fakeUSDC } })).rejects.toThrow(
+      'REFUSED',
+    )
   })
 
   /**
    * Closes the AutoDraw card and reclaims its minimum balance, tearing down the integration
-   * fixture.
+   * fixture. No delegation cleanup is needed here — the opt-out above already did it.
    */
   test('AutoDraw: close card', async () => {
     const result = await appClient.send.cardClose({
@@ -1555,7 +1637,7 @@ describe('Auto-Draw Card', () => {
     await appClient.send.cardDisableAsset({
       args: { card: bindingCardB, asset: fakeUSDC },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(2_000),
+      staticFee: AlgoAmount.MicroAlgos(3_000),
     })
     const closed = await appClient.send.cardClose({
       args: { card: bindingCardB },
@@ -1569,12 +1651,17 @@ describe('Auto-Draw Card', () => {
   /**
    * Teardown for the remaining binding card. Card B was already drained and closed above, so only
    * card A is left — its asset must be closed out before the account itself can be closed.
+   *
+   * The opt-out exercises the no-op revocation path: this holder's FakeUSDC delegation is long
+   * gone, revoked when the AutoDraw card opted out. `killFor` treats a missing delegation as
+   * nothing to do rather than an error, so an asset that was never delegated — or was already
+   * revoked — still closes out normally instead of stranding the card.
    */
   test('Withdrawal binding: close the remaining card', async () => {
     await appClient.send.cardDisableAsset({
       args: { card: bindingCardA, asset: fakeUSDC },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(2_000),
+      staticFee: AlgoAmount.MicroAlgos(3_000),
     })
 
     const closed = await appClient.send.cardClose({

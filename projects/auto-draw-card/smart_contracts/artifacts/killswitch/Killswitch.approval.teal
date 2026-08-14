@@ -11,13 +11,13 @@ main:
     !
     assert
     txn ApplicationID
-    bz main_create_NoOp@16
-    pushbytess 0xa9312ef1 0xd358d1e0 0x88cd524a 0xb1bbb0a8 0xe17bafb4 0xb0d953b3 0x0178f94b 0x1b529de8 0x0cadd163 0x785a1bf9 // method "authorize(address,uint64)void", method "enable(address,uint64)void", method "kill(uint64)void", method "owner()address", method "transferOwnership(address)void", method "pauser()address", method "pause()void", method "unpause()void", method "updatePauser(address)void", method "recoverAsset(uint64,uint64,address)void"
+    bz main_create_NoOp@17
+    pushbytess 0xa9312ef1 0xd358d1e0 0x88cd524a 0x7bb93da2 0xb1bbb0a8 0xe17bafb4 0xb0d953b3 0x0178f94b 0x1b529de8 0x0cadd163 0x785a1bf9 // method "authorize(address,uint64)void", method "enable(address,uint64)void", method "kill(uint64)void", method "killFor(address,uint64)void", method "owner()address", method "transferOwnership(address)void", method "pauser()address", method "pause()void", method "unpause()void", method "updatePauser(address)void", method "recoverAsset(uint64,uint64,address)void"
     txna ApplicationArgs 0
-    match authorize enable kill owner transferOwnership pauser pause unpause updatePauser recoverAsset
+    match authorize enable kill killFor owner transferOwnership pauser pause unpause updatePauser recoverAsset
     err
 
-main_create_NoOp@16:
+main_create_NoOp@17:
     // smart_contracts/killswitch/contract.algo.ts:46
     // export class Killswitch extends classes(Ownable, Pausable, Recoverable) {
     pushbytes 0x76fe6844 // method "deploy(address,uint64)address"
@@ -250,6 +250,59 @@ kill:
     pop
     // smart_contracts/killswitch/contract.algo.ts:112
     // public kill(asset: Asset): void {
+    intc_1 // 1
+    return
+
+
+// smart_contracts/killswitch/contract.algo.ts::Killswitch.killFor[routing]() -> void:
+killFor:
+    // smart_contracts/killswitch/contract.algo.ts:128
+    // public killFor(account: Account, asset: Asset): void {
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_3 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    btoi
+    // smart_contracts/killswitch/contract.algo.ts:129
+    // assert(Global.callerApplicationId === this.main_app.value.id, 'SENDER_NOT_ALLOWED')
+    global CallerApplicationID
+    intc_0 // 0
+    // smart_contracts/killswitch/contract.algo.ts:51
+    // public main_app = GlobalState<Application>({ key: 'ma' })
+    bytec 4 // "ma"
+    // smart_contracts/killswitch/contract.algo.ts:129
+    // assert(Global.callerApplicationId === this.main_app.value.id, 'SENDER_NOT_ALLOWED')
+    app_global_get_ex
+    assert // check GlobalState exists
+    ==
+    assert // SENDER_NOT_ALLOWED
+    // smart_contracts/killswitch/contract.algo.ts:131
+    // const key = [account, asset] as AccountAssetKey
+    itob
+    concat
+    dup
+    // smart_contracts/killswitch/contract.algo.ts:132
+    // if (this.accountAssetPairs(key).exists) {
+    box_len
+    bury 1
+    bz killFor_after_if_else@3
+    // smart_contracts/killswitch/contract.algo.ts:133
+    // this.accountAssetPairs(key).delete()
+    dup
+    box_del
+    pop
+
+killFor_after_if_else@3:
+    // smart_contracts/killswitch/contract.algo.ts:128
+    // public killFor(account: Account, asset: Asset): void {
     intc_1 // 1
     return
 

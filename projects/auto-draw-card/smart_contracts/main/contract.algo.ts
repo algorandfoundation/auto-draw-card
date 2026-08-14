@@ -24,6 +24,7 @@
 import {
   abimethod,
   Account,
+  Application,
   arc4,
   assert,
   Asset,
@@ -43,6 +44,7 @@ import {
   uint64,
 } from '@algorandfoundation/algorand-typescript'
 import { classes } from 'polytype'
+import type { Killswitch } from '../killswitch/contract.algo'
 import { Ownable } from '../roles/ownable.algo'
 import { Pausable } from '../roles/pausable.algo'
 import { Recoverable } from '../roles/recoverable.algo'
@@ -173,6 +175,11 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   // account permission to call cardDebit. MBR is released on removal.
   public withdraw_operators = BoxMap<Account, uint64>({ keyPrefix: 'wop' })
 
+  // The Killswitch contract holding AutoDraw delegations. Registered by the owner after
+  // deployment (the two contracts reference each other, so neither can know the other's app id
+  // at create time). While unset, disabling an asset skips delegation cleanup.
+  public killswitch_app = GlobalState<Application>({ key: 'ks' })
+
   // ========== Internal Utils ==========
   /**
    * Check if the current transaction sender is the card holder/owner
@@ -277,6 +284,31 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
       this.withdrawals(owner).delete()
       emit<WithdrawalRequestCancelled>(withdrawal)
     }
+  }
+
+  /**
+   * Revoke `owner`'s AutoDraw delegation for a single asset on the Killswitch contract.
+   *
+   * The delegation box lives in the Killswitch app, keyed by (account, asset), and must be
+   * referenced by the calling transaction. Revoking is best-effort: an asset the holder never
+   * enabled is a no-op rather than an error.
+   *
+   * Delegation is per (holder, asset) and not per card, so revoking here also stops automated
+   * draws of that asset into any other card the holder still owns.
+   *
+   * @param owner Account whose delegation is being revoked
+   * @param asset Asset to revoke delegation for
+   */
+  private killDelegation(owner: Account, asset: Asset): void {
+    // Nothing to revoke against until the owner registers the Killswitch app.
+    if (!this.killswitch_app.hasValue) {
+      return
+    }
+
+    arc4.abiCall<typeof Killswitch.prototype.killFor>({
+      appId: this.killswitch_app.value,
+      args: [owner, asset],
+    })
   }
 
   private withdrawFunds(
@@ -443,12 +475,13 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    * @param card Address to close
    */
   public cardClose(card: Account): void {
-    assert(this.isPartner() || this.isCardOwner(card), 'SENDER_NOT_ALLOWED')
     assert(this.cards(card).exists, 'CARD_NOT_FOUND')
+    const cardOwner = this.cards(card).value.owner
+    assert(this.isPartner() || cardOwner === Txn.sender, 'SENDER_NOT_ALLOWED')
 
     // Drop any pending request the holder had against this card before the card box goes away,
     // otherwise the request box outlives the card it points at and can never be cleaned up.
-    this.clearWithdrawalRequest(this.cards(card).value.owner, card)
+    this.clearWithdrawalRequest(cardOwner, card)
 
     // Close the card account back to the contract, returning its balance to the
     // owner-funded pool. Deleting the box releases its MBR back to the contract too.
@@ -586,6 +619,20 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   }
 
   /**
+   * Sets the Killswitch application whose AutoDraw delegations are revoked when a card opts out
+   * of an asset. The app id is owner-controlled rather than passed in per call, so a caller
+   * cannot point the revocation at a look-alike contract and have the real delegation survive.
+   * Only the owner of the contract can call this method.
+   *
+   * @param newKillswitchApp The Killswitch application to register.
+   */
+  public setKillswitchApp(newKillswitchApp: Application): void {
+    this.onlyOwner()
+
+    this.killswitch_app.value = newKillswitchApp
+  }
+
+  /**
    * Authorize an account as a withdraw operator, allowing it to call cardDebit.
    * Only the owner of the contract can call this method.
    *
@@ -614,14 +661,22 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    * Allows the card holder (or partner) to CloseOut of an asset, reducing the minimum balance
    * requirement of the account. The freed MBR remains within the card account.
    *
+   * The holder's AutoDraw delegation for the asset goes with it. Opting the card out is the point
+   * at which the asset can no longer be drawn into it, and it is the only chokepoint that catches
+   * every case — a card cannot be closed while it still holds an ASA, so every asset a card ever
+   * held passes through here. Revoking is best-effort, so an asset that was never delegated
+   * closes out normally.
+   *
    * @param card - The address of the card.
    * @param asset - The ID of the asset to be removed.
    */
   public cardDisableAsset(card: Account, asset: Asset): void {
-    assert(this.isPartner() || this.isCardOwner(card), 'SENDER_NOT_ALLOWED')
     assert(this.cards(card).exists, 'CARD_NOT_FOUND')
+    const cardOwner = this.cards(card).value.owner
+    assert(this.isPartner() || cardOwner === Txn.sender, 'SENDER_NOT_ALLOWED')
 
     this.cardAssetCloseOut(card, asset)
+    this.killDelegation(cardOwner, asset)
   }
 
   /**

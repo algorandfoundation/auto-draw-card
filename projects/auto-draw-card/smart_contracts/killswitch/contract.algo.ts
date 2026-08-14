@@ -114,4 +114,23 @@ export class Killswitch extends classes(Ownable, Pausable, Recoverable) {
     assert(this.accountAssetPairs(key).exists, 'ALREADY_DISABLED')
     this.accountAssetPairs(key).delete()
   }
+
+  /**
+   * Disables AutoDraw delegation of the given asset on behalf of `account`.
+   *
+   * Unlike `kill`, a delegation that is not enabled is not an error. Main revokes on every
+   * asset opt-out and cannot tell which assets the holder actually delegated, so failing here
+   * would block opting a card out of an asset it never delegated.
+   *
+   * @param account The account whose delegation is being revoked.
+   * @param asset The asset to disable delegation for.
+   */
+  public killFor(account: Account, asset: Asset): void {
+    assert(Global.callerApplicationId === this.main_app.value.id, 'SENDER_NOT_ALLOWED')
+
+    const key = [account, asset] as AccountAssetKey
+    if (this.accountAssetPairs(key).exists) {
+      this.accountAssetPairs(key).delete()
+    }
+  }
 }

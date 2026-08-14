@@ -3,7 +3,7 @@ import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount'
 import algosdk from 'algosdk'
 import type { KillswitchClient } from '../artifacts/killswitch/KillswitchClient'
 import { KillswitchFactory } from '../artifacts/killswitch/KillswitchClient'
-import { MainFactory } from '../artifacts/main/MainClient'
+import { MainClient, MainFactory } from '../artifacts/main/MainClient'
 
 export interface DeployKillswitchParams {
   /** Algorand client to use. Defaults to one built from the environment. */
@@ -69,6 +69,28 @@ export async function deploy(params: DeployKillswitchParams = {}): Promise<Kills
   console.log(
     `Deployed Killswitch '${appClient.appClient.appName}' (${appClient.appClient.appId}) bound to Main ${mainAppId}`,
   )
+
+  // The binding goes both ways: Main revokes a holder's AutoDraw delegations through this
+  // contract when their card closes, so it needs this app id. The Killswitch is created last —
+  // it needs Main's app id at creation time — so the back-reference can only be written here.
+  const mainClient = algorand.client.getTypedAppClientById(MainClient, {
+    appId: mainAppId,
+    defaultSender: deployer,
+  })
+  if ((await mainClient.state.global.killswitchApp()) !== appClient.appId) {
+    try {
+      await mainClient.send.setKillswitchApp({ args: { newKillswitchApp: appClient.appId } })
+      console.log(`Registered Killswitch ${appClient.appId} on Main ${mainAppId}`)
+    } catch {
+      // `setKillswitchApp` is owner-gated, so a deployer that does not hold the owner key cannot
+      // make this write. Everything else about the deployment is valid; until the owner registers
+      // the app, closing a card just skips delegation cleanup.
+      console.warn(
+        `Could not register Killswitch ${appClient.appId} on Main ${mainAppId} as ${deployer.toString()}. ` +
+          'Call setKillswitchApp as the Main owner to enable delegation cleanup on card close.',
+      )
+    }
+  }
 
   return appClient
 }
