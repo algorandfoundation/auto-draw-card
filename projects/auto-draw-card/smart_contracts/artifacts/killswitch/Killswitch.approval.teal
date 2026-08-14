@@ -5,7 +5,7 @@
 main:
     intcblock 0 1 32 8
     bytecblock "_owner" "_pauser" "paused" 0x151f7c75 "ma"
-    // smart_contracts/killswitch/contract.algo.ts:46
+    // smart_contracts/killswitch/contract.algo.ts:49
     // export class Killswitch extends classes(Ownable, Pausable, Recoverable) {
     txn OnCompletion
     !
@@ -18,7 +18,7 @@ main:
     err
 
 main_create_NoOp@17:
-    // smart_contracts/killswitch/contract.algo.ts:46
+    // smart_contracts/killswitch/contract.algo.ts:49
     // export class Killswitch extends classes(Ownable, Pausable, Recoverable) {
     pushbytes 0x76fe6844 // method "deploy(address,uint64)address"
     txna ApplicationArgs 0
@@ -28,7 +28,7 @@ main_create_NoOp@17:
 
 // smart_contracts/killswitch/contract.algo.ts::Killswitch.deploy[routing]() -> void:
 deploy:
-    // smart_contracts/killswitch/contract.algo.ts:60
+    // smart_contracts/killswitch/contract.algo.ts:63
     // @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
     txna ApplicationArgs 1
     dup
@@ -43,38 +43,38 @@ deploy:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/killswitch/contract.algo.ts:62
+    // smart_contracts/killswitch/contract.algo.ts:65
     // this._transferOwnership(owner)
     swap
     callsub _transferOwnership
     // smart_contracts/roles/pausable.algo.ts:35
     // public _pauser = GlobalState<Account>()
     bytec_1 // "_pauser"
-    // smart_contracts/killswitch/contract.algo.ts:63
+    // smart_contracts/killswitch/contract.algo.ts:66
     // this._pauser.value = Txn.sender
     txn Sender
     app_global_put
     // smart_contracts/roles/pausable.algo.ts:37
     // public paused = GlobalState<boolean>()
     bytec_2 // "paused"
-    // smart_contracts/killswitch/contract.algo.ts:64
+    // smart_contracts/killswitch/contract.algo.ts:67
     // this.paused.value = false
     intc_0 // 0
     app_global_put
-    // smart_contracts/killswitch/contract.algo.ts:51
+    // smart_contracts/killswitch/contract.algo.ts:54
     // public main_app = GlobalState<Application>({ key: 'ma' })
     bytec 4 // "ma"
-    // smart_contracts/killswitch/contract.algo.ts:65
+    // smart_contracts/killswitch/contract.algo.ts:68
     // this.main_app.value = main
     swap
     app_global_put
-    // smart_contracts/killswitch/contract.algo.ts:60
+    // smart_contracts/killswitch/contract.algo.ts:63
     // @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
     bytec_3 // 0x151f7c75
-    // smart_contracts/killswitch/contract.algo.ts:66
+    // smart_contracts/killswitch/contract.algo.ts:69
     // return Global.currentApplicationAddress
     global CurrentApplicationAddress
-    // smart_contracts/killswitch/contract.algo.ts:60
+    // smart_contracts/killswitch/contract.algo.ts:63
     // @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
     concat
     log
@@ -84,7 +84,7 @@ deploy:
 
 // smart_contracts/killswitch/contract.algo.ts::Killswitch.authorize[routing]() -> void:
 authorize:
-    // smart_contracts/killswitch/contract.algo.ts:75
+    // smart_contracts/killswitch/contract.algo.ts:78
     // public authorize(account: Account, asset: Asset): void {
     txna ApplicationArgs 1
     dup
@@ -111,14 +111,14 @@ authorize:
     assert // check GlobalState exists
     !
     assert // CONTRACT_PAUSED
-    // smart_contracts/killswitch/contract.algo.ts:77
+    // smart_contracts/killswitch/contract.algo.ts:80
     // assert(this.accountAssetPairs([account, asset]).exists, 'REFUSED')
     itob
     concat
     box_len
     bury 1
     assert // REFUSED
-    // smart_contracts/killswitch/contract.algo.ts:75
+    // smart_contracts/killswitch/contract.algo.ts:78
     // public authorize(account: Account, asset: Asset): void {
     intc_1 // 1
     return
@@ -126,7 +126,7 @@ authorize:
 
 // smart_contracts/killswitch/contract.algo.ts::Killswitch.enable[routing]() -> void:
 enable:
-    // smart_contracts/killswitch/contract.algo.ts:93
+    // smart_contracts/killswitch/contract.algo.ts:96
     // public enable(card: Account, asset: Asset): void {
     txna ApplicationArgs 1
     dup
@@ -141,44 +141,44 @@ enable:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/killswitch/contract.algo.ts:94
+    // smart_contracts/killswitch/contract.algo.ts:97
     // const key = [Txn.sender, asset] as AccountAssetKey
     txn Sender
     dig 1
     itob
     concat
-    // smart_contracts/killswitch/contract.algo.ts:95
+    // smart_contracts/killswitch/contract.algo.ts:98
     // assert(!this.accountAssetPairs(key).exists, 'ALREADY_ENABLED')
     dup
     box_len
     bury 1
     !
     assert // ALREADY_ENABLED
-    // smart_contracts/killswitch/contract.algo.ts:96
+    // smart_contracts/killswitch/contract.algo.ts:99
     // assert(card.isOptedIn(asset), 'ASSET_NOT_ALLOWED')
     dig 2
     uncover 2
     asset_holding_get AssetBalance
     bury 1
     assert // ASSET_NOT_ALLOWED
-    // smart_contracts/killswitch/contract.algo.ts:98-101
+    // smart_contracts/killswitch/contract.algo.ts:101-104
     // const cardData = arc4.abiCall<typeof Main.prototype.getCardData>({
     //   appId: this.main_app.value,
     //   args: [card],
     // }).returnValue
     itxn_begin
-    // smart_contracts/killswitch/contract.algo.ts:99
+    // smart_contracts/killswitch/contract.algo.ts:102
     // appId: this.main_app.value,
     intc_0 // 0
-    // smart_contracts/killswitch/contract.algo.ts:51
+    // smart_contracts/killswitch/contract.algo.ts:54
     // public main_app = GlobalState<Application>({ key: 'ma' })
     bytec 4 // "ma"
-    // smart_contracts/killswitch/contract.algo.ts:99
+    // smart_contracts/killswitch/contract.algo.ts:102
     // appId: this.main_app.value,
     app_global_get_ex
     assert // check GlobalState exists
     itxn_field ApplicationID
-    // smart_contracts/killswitch/contract.algo.ts:98-101
+    // smart_contracts/killswitch/contract.algo.ts:101-104
     // const cardData = arc4.abiCall<typeof Main.prototype.getCardData>({
     //   appId: this.main_app.value,
     //   args: [card],
@@ -204,18 +204,18 @@ enable:
     pushint 80
     ==
     assert // invalid number of bytes for smart_contracts/main/contract.algo.ts::CardData
-    // smart_contracts/killswitch/contract.algo.ts:102
+    // smart_contracts/killswitch/contract.algo.ts:105
     // assert(cardData.owner === Txn.sender, 'NOT_CARD_OWNER')
     extract 4 32
     txn Sender
     ==
     assert // NOT_CARD_OWNER
-    // smart_contracts/killswitch/contract.algo.ts:104
+    // smart_contracts/killswitch/contract.algo.ts:107
     // this.accountAssetPairs(key).create({ size: 0 })
     intc_0 // 0
     box_create
     pop
-    // smart_contracts/killswitch/contract.algo.ts:93
+    // smart_contracts/killswitch/contract.algo.ts:96
     // public enable(card: Account, asset: Asset): void {
     intc_1 // 1
     return
@@ -223,7 +223,7 @@ enable:
 
 // smart_contracts/killswitch/contract.algo.ts::Killswitch.kill[routing]() -> void:
 kill:
-    // smart_contracts/killswitch/contract.algo.ts:112
+    // smart_contracts/killswitch/contract.algo.ts:115
     // public kill(asset: Asset): void {
     txna ApplicationArgs 1
     dup
@@ -232,23 +232,23 @@ kill:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/killswitch/contract.algo.ts:113
+    // smart_contracts/killswitch/contract.algo.ts:116
     // const key = [Txn.sender, asset] as AccountAssetKey
     txn Sender
     swap
     itob
     concat
-    // smart_contracts/killswitch/contract.algo.ts:114
+    // smart_contracts/killswitch/contract.algo.ts:117
     // assert(this.accountAssetPairs(key).exists, 'ALREADY_DISABLED')
     dup
     box_len
     bury 1
     assert // ALREADY_DISABLED
-    // smart_contracts/killswitch/contract.algo.ts:115
+    // smart_contracts/killswitch/contract.algo.ts:118
     // this.accountAssetPairs(key).delete()
     box_del
     pop
-    // smart_contracts/killswitch/contract.algo.ts:112
+    // smart_contracts/killswitch/contract.algo.ts:115
     // public kill(asset: Asset): void {
     intc_1 // 1
     return
@@ -256,7 +256,7 @@ kill:
 
 // smart_contracts/killswitch/contract.algo.ts::Killswitch.killFor[routing]() -> void:
 killFor:
-    // smart_contracts/killswitch/contract.algo.ts:128
+    // smart_contracts/killswitch/contract.algo.ts:131
     // public killFor(account: Account, asset: Asset): void {
     txna ApplicationArgs 1
     dup
@@ -271,37 +271,37 @@ killFor:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/killswitch/contract.algo.ts:129
+    // smart_contracts/killswitch/contract.algo.ts:132
     // assert(Global.callerApplicationId === this.main_app.value.id, 'SENDER_NOT_ALLOWED')
     global CallerApplicationID
     intc_0 // 0
-    // smart_contracts/killswitch/contract.algo.ts:51
+    // smart_contracts/killswitch/contract.algo.ts:54
     // public main_app = GlobalState<Application>({ key: 'ma' })
     bytec 4 // "ma"
-    // smart_contracts/killswitch/contract.algo.ts:129
+    // smart_contracts/killswitch/contract.algo.ts:132
     // assert(Global.callerApplicationId === this.main_app.value.id, 'SENDER_NOT_ALLOWED')
     app_global_get_ex
     assert // check GlobalState exists
     ==
     assert // SENDER_NOT_ALLOWED
-    // smart_contracts/killswitch/contract.algo.ts:131
+    // smart_contracts/killswitch/contract.algo.ts:134
     // const key = [account, asset] as AccountAssetKey
     itob
     concat
     dup
-    // smart_contracts/killswitch/contract.algo.ts:132
+    // smart_contracts/killswitch/contract.algo.ts:135
     // if (this.accountAssetPairs(key).exists) {
     box_len
     bury 1
     bz killFor_after_if_else@3
-    // smart_contracts/killswitch/contract.algo.ts:133
+    // smart_contracts/killswitch/contract.algo.ts:136
     // this.accountAssetPairs(key).delete()
     dup
     box_del
     pop
 
 killFor_after_if_else@3:
-    // smart_contracts/killswitch/contract.algo.ts:128
+    // smart_contracts/killswitch/contract.algo.ts:131
     // public killFor(account: Account, asset: Asset): void {
     intc_1 // 1
     return

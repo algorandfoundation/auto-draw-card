@@ -148,6 +148,25 @@ class ControlledAddress extends Contract {
   }
 }
 
+// ========== Trust model: off-chain invariants ==========
+//
+// Partner enforces ONE ACTIVE CARD PER HOLDER off-chain, at card issuance.
+//
+// This contract deliberately does not enforce that, and on-chain logic must stay correct when a
+// holder does hold several: `cardRecover` can produce that state directly, and the CARD_MISMATCH
+// guard in `withdraw` exists for exactly this case (see the withdrawal-binding tests in
+// contract.e2e.spec.ts, which own two cards to prove a request against one cannot drain the other).
+//
+// Two consequences follow from keying state by holder rather than by card. Both are ACCEPTED
+// behaviour, not defects to be re-litigated:
+//
+//   - A holder has a single withdrawal-request slot covering all of their cards, because
+//     `withdrawals` is keyed by the requesting account (see `clearWithdrawalRequest`).
+//   - Revoking a holder's AutoDraw delegation applies to every card they own, because the
+//     Killswitch keys delegation by (holder, asset) (see `killDelegation`).
+//
+// Anything that would break under multiple cards per holder is a real bug; anything that merely
+// applies holder-wide is the design.
 export class Main extends classes(Ownable, Pausable, Recoverable) {
   // ========== Storage ==========
   // Cards
