@@ -47,14 +47,14 @@ deploy:
     // this._transferOwnership(owner)
     swap
     callsub _transferOwnership
-    // smart_contracts/roles/pausable.algo.ts:34
+    // smart_contracts/roles/pausable.algo.ts:35
     // public _pauser = GlobalState<Account>()
     bytec_1 // "_pauser"
     // smart_contracts/killswitch/contract.algo.ts:63
     // this._pauser.value = Txn.sender
     txn Sender
     app_global_put
-    // smart_contracts/roles/pausable.algo.ts:36
+    // smart_contracts/roles/pausable.algo.ts:37
     // public paused = GlobalState<boolean>()
     bytec_2 // "paused"
     // smart_contracts/killswitch/contract.algo.ts:64
@@ -99,18 +99,18 @@ authorize:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/roles/pausable.algo.ts:43
-    // assert(!this.paused.value)
+    // smart_contracts/roles/pausable.algo.ts:44
+    // assert(!this.paused.value, 'CONTRACT_PAUSED')
     intc_0 // 0
-    // smart_contracts/roles/pausable.algo.ts:36
+    // smart_contracts/roles/pausable.algo.ts:37
     // public paused = GlobalState<boolean>()
     bytec_2 // "paused"
-    // smart_contracts/roles/pausable.algo.ts:43
-    // assert(!this.paused.value)
+    // smart_contracts/roles/pausable.algo.ts:44
+    // assert(!this.paused.value, 'CONTRACT_PAUSED')
     app_global_get_ex
     assert // check GlobalState exists
     !
-    assert
+    assert // CONTRACT_PAUSED
     // smart_contracts/killswitch/contract.algo.ts:77
     // assert(this.accountAssetPairs([account, asset]).exists, 'REFUSED')
     itob
@@ -300,17 +300,17 @@ transferOwnership:
 
 // smart_contracts/roles/pausable.algo.ts::Pausable.pauser[routing]() -> void:
 pauser:
-    // smart_contracts/roles/pausable.algo.ts:59
+    // smart_contracts/roles/pausable.algo.ts:60
     // return this._pauser.value
     intc_0 // 0
-    // smart_contracts/roles/pausable.algo.ts:34
+    // smart_contracts/roles/pausable.algo.ts:35
     // public _pauser = GlobalState<Account>()
     bytec_1 // "_pauser"
-    // smart_contracts/roles/pausable.algo.ts:59
+    // smart_contracts/roles/pausable.algo.ts:60
     // return this._pauser.value
     app_global_get_ex
     assert // check GlobalState exists
-    // smart_contracts/roles/pausable.algo.ts:58
+    // smart_contracts/roles/pausable.algo.ts:59
     // public pauser(): Account {
     bytec_3 // 0x151f7c75
     swap
@@ -322,21 +322,21 @@ pauser:
 
 // smart_contracts/roles/pausable.algo.ts::Pausable.pause[routing]() -> void:
 pause:
-    // smart_contracts/roles/pausable.algo.ts:67
+    // smart_contracts/roles/pausable.algo.ts:68
     // this.onlyPauser()
     callsub onlyPauser
-    // smart_contracts/roles/pausable.algo.ts:36
+    // smart_contracts/roles/pausable.algo.ts:37
     // public paused = GlobalState<boolean>()
     bytec_2 // "paused"
-    // smart_contracts/roles/pausable.algo.ts:69
+    // smart_contracts/roles/pausable.algo.ts:70
     // this.paused.value = true
     intc_1 // 1
     app_global_put
-    // smart_contracts/roles/pausable.algo.ts:70
+    // smart_contracts/roles/pausable.algo.ts:71
     // emit<Pause>({})
     pushbytes 0xcf23a30f
     log
-    // smart_contracts/roles/pausable.algo.ts:66
+    // smart_contracts/roles/pausable.algo.ts:67
     // public pause(): void {
     intc_1 // 1
     return
@@ -344,21 +344,21 @@ pause:
 
 // smart_contracts/roles/pausable.algo.ts::Pausable.unpause[routing]() -> void:
 unpause:
-    // smart_contracts/roles/pausable.algo.ts:77
+    // smart_contracts/roles/pausable.algo.ts:78
     // this.onlyPauser()
     callsub onlyPauser
-    // smart_contracts/roles/pausable.algo.ts:36
+    // smart_contracts/roles/pausable.algo.ts:37
     // public paused = GlobalState<boolean>()
     bytec_2 // "paused"
-    // smart_contracts/roles/pausable.algo.ts:79
+    // smart_contracts/roles/pausable.algo.ts:80
     // this.paused.value = false
     intc_0 // 0
     app_global_put
-    // smart_contracts/roles/pausable.algo.ts:80
+    // smart_contracts/roles/pausable.algo.ts:81
     // emit<Unpause>({})
     pushbytes 0xb163ee0b
     log
-    // smart_contracts/roles/pausable.algo.ts:76
+    // smart_contracts/roles/pausable.algo.ts:77
     // public unpause(): void {
     intc_1 // 1
     return
@@ -366,7 +366,7 @@ unpause:
 
 // smart_contracts/roles/pausable.algo.ts::Pausable.updatePauser[routing]() -> void:
 updatePauser:
-    // smart_contracts/roles/pausable.algo.ts:86
+    // smart_contracts/roles/pausable.algo.ts:87
     // public updatePauser(_newPauser: Account): void {
     txna ApplicationArgs 1
     dup
@@ -374,29 +374,29 @@ updatePauser:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/roles/pausable.algo.ts:87
-    // this.onlyPauser()
-    callsub onlyPauser
-    // smart_contracts/roles/pausable.algo.ts:89
-    // assert(_newPauser !== Global.zeroAddress)
+    // smart_contracts/roles/pausable.algo.ts:88
+    // this.onlyOwner()
+    callsub onlyOwner
+    // smart_contracts/roles/pausable.algo.ts:90
+    // assert(_newPauser !== Global.zeroAddress, 'ADDRESS_NOT_ALLOWED')
     dup
     global ZeroAddress
     !=
-    assert
-    // smart_contracts/roles/pausable.algo.ts:34
+    assert // ADDRESS_NOT_ALLOWED
+    // smart_contracts/roles/pausable.algo.ts:35
     // public _pauser = GlobalState<Account>()
     bytec_1 // "_pauser"
-    // smart_contracts/roles/pausable.algo.ts:90
+    // smart_contracts/roles/pausable.algo.ts:91
     // this._pauser.value = _newPauser
     dig 1
     app_global_put
-    // smart_contracts/roles/pausable.algo.ts:91
+    // smart_contracts/roles/pausable.algo.ts:92
     // emit<PauserChanged>({ newAddress: this._pauser.value })
     pushbytes 0xcc40923c // method "PauserChanged(address)"
     swap
     concat
     log
-    // smart_contracts/roles/pausable.algo.ts:86
+    // smart_contracts/roles/pausable.algo.ts:87
     // public updatePauser(_newPauser: Account): void {
     intc_1 // 1
     return
@@ -580,17 +580,17 @@ _transferOwnership_ternary_false@2:
 
 // smart_contracts/roles/pausable.algo.ts::Pausable.onlyPauser() -> void:
 onlyPauser:
-    // smart_contracts/roles/pausable.algo.ts:50
-    // assert(Txn.sender === this._pauser.value)
+    // smart_contracts/roles/pausable.algo.ts:51
+    // assert(Txn.sender === this._pauser.value, 'SENDER_NOT_ALLOWED')
     txn Sender
     intc_0 // 0
-    // smart_contracts/roles/pausable.algo.ts:34
+    // smart_contracts/roles/pausable.algo.ts:35
     // public _pauser = GlobalState<Account>()
     bytec_1 // "_pauser"
-    // smart_contracts/roles/pausable.algo.ts:50
-    // assert(Txn.sender === this._pauser.value)
+    // smart_contracts/roles/pausable.algo.ts:51
+    // assert(Txn.sender === this._pauser.value, 'SENDER_NOT_ALLOWED')
     app_global_get_ex
     assert // check GlobalState exists
     ==
-    assert
+    assert // SENDER_NOT_ALLOWED
     retsub

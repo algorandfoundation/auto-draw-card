@@ -941,9 +941,9 @@ describe('Auto-Draw Card', () => {
   test('Killswitch: pause contract — authorize fails', async () => {
     await ksClient.send.pause({ args: [] })
 
-    await expect(
-      ksClient.send.authorize({ args: { account: user.addr.toString(), asset: fakeUSDC } }),
-    ).rejects.toThrow()
+    await expect(ksClient.send.authorize({ args: { account: user.addr.toString(), asset: fakeUSDC } })).rejects.toThrow(
+      'CONTRACT_PAUSED',
+    )
   })
 
   /**
@@ -1163,6 +1163,78 @@ describe('Auto-Draw Card', () => {
     await expect(composer.send()).rejects.toThrow()
 
     await ksClient.send.unpause({ args: [] })
+  })
+
+  // ========== Main pause ==========
+
+  /**
+   * The pause switch is held by the pauser role, which `deploy` seeds with the creating account —
+   * here the same account that owns the contract. An account holding neither role is refused, so
+   * the pause below can only have come from the role and not from being any privileged caller.
+   */
+  test('Main: pause fails for a non-pauser', async () => {
+    await expect(appClient.send.pause({ args: [], sender: user2.addr })).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    expect(await appClient.state.global.paused()).toEqual(0n)
+  })
+
+  /**
+   * `cardDebit` is the one Main method behind `whenNotPaused`, which makes the pause the emergency
+   * brake on automated draws: with it engaged, an authorized operator debiting a live card at the
+   * correct nonce — a call that succeeds a test later — is rejected with CONTRACT_PAUSED.
+   */
+  test('Main: paused contract rejects cardDebit with CONTRACT_PAUSED', async () => {
+    const paused = await appClient.send.pause({ args: [] })
+    expect(paused.confirmation.poolError).toBe('')
+    expect(await appClient.state.global.paused()).toEqual(1n)
+
+    const nonceResult = await appClient.send.getNextCardNonce({
+      args: { card: autoDrawCardAddress },
+    })
+
+    await expect(
+      appClient.send.cardDebit({
+        args: {
+          cardOwner: user.addr.toString(),
+          card: autoDrawCardAddress,
+          asset: fakeUSDC,
+          amount: 0,
+          nonce: nonceResult.return!,
+          ref: 'Main Test REF-PAUSED',
+        },
+        sender: withdrawOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('CONTRACT_PAUSED')
+  })
+
+  /**
+   * Positive control for the pause above, and proof the brake releases: after `unpause` the
+   * identical debit succeeds, so the rejection can only have come from the paused flag. The debit
+   * is zero-amount so the card balance is untouched and only the nonce advances.
+   */
+  test('Main: unpause restores cardDebit', async () => {
+    const unpaused = await appClient.send.unpause({ args: [] })
+    expect(unpaused.confirmation.poolError).toBe('')
+    expect(await appClient.state.global.paused()).toEqual(0n)
+
+    const nonceResult = await appClient.send.getNextCardNonce({
+      args: { card: autoDrawCardAddress },
+    })
+
+    const debit = await appClient.send.cardDebit({
+      args: {
+        cardOwner: user.addr.toString(),
+        card: autoDrawCardAddress,
+        asset: fakeUSDC,
+        amount: 0,
+        nonce: nonceResult.return!,
+        ref: 'Main Test REF-UNPAUSED',
+      },
+      sender: withdrawOperator.addr,
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+    expect(debit.confirmation.poolError).toBe('')
   })
 
   // ========== Withdraw operator revocation ==========
@@ -1525,5 +1597,145 @@ describe('Auto-Draw Card', () => {
     })
 
     expect(result.confirmation.poolError).toBe('')
+  })
+})
+
+/**
+ * The suite above deploys with the creating account as its own owner, which collapses three
+ * distinct roles — deployer, owner, pauser — onto one address and hides every distinction between
+ * them. A real deployment separates them: an operational account creates the app and hands
+ * ownership to a cold key.
+ *
+ * This suite deploys that way, with `deployer`, `owner`, and the omnibus account all distinct, and
+ * uses the separation to pin down who may rotate the pauser.
+ */
+describe('Main: deployer separate from owner', () => {
+  let deployer: algosdk.Account & algosdk.Address
+  let contractOwner: algosdk.Account & algosdk.Address
+  let newPauser: algosdk.Account & algosdk.Address
+  let omnibusAcc: algosdk.Account & algosdk.Address
+
+  let client: MainClient
+
+  const ZERO_ADDRESS = algosdk.encodeAddress(new Uint8Array(32))
+
+  beforeAll(async () => {
+    await fixture.newScope()
+    const { algorand, generateAccount } = fixture.context
+
+    ;[deployer, contractOwner, newPauser, omnibusAcc] = await Promise.all([
+      generateAccount({ initialFunds: AlgoAmount.Algos(20) }),
+      generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
+      generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
+      generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
+    ])
+
+    client = await deployMain({
+      algorand,
+      deployer: deployer.addr,
+      owner: contractOwner.addr.toString(),
+      omnibus: omnibusAcc.addr.toString(),
+      fundAmount: AlgoAmount.MicroAlgos(1_000_000),
+    })
+  })
+
+  /**
+   * Regression test for the deploy-time omnibus assignment. `deploy` hands ownership to `owner`
+   * before it records the omnibus address, so routing that write through the public
+   * `setOmnibusAddress` setter — which is `onlyOwner` — asserted against an owner the creating
+   * account no longer was, and app creation reverted outright for every deployment where the
+   * deployer is not the owner. Writing the global directly is what makes this deployment shape
+   * possible at all; the `beforeAll` above is where the regression would surface.
+   */
+  test('Deploy records the omnibus address when the deployer is not the owner', async () => {
+    expect(await client.state.global.omnibusAddress()).toBe(omnibusAcc.addr.toString())
+    expect(await client.state.global._owner()).toBe(contractOwner.addr.toString())
+  })
+
+  /**
+   * The role split the rest of this suite depends on: `deploy` transfers ownership to `owner` but
+   * seeds the pauser with `Txn.sender`, leaving the operational deploying account able to hit the
+   * emergency brake without holding ownership.
+   */
+  test('Deploy seeds the pauser with the deployer, not the owner', async () => {
+    expect(await client.state.global._pauser()).toBe(deployer.addr.toString())
+    expect(await client.state.global.paused()).toEqual(0n)
+  })
+
+  /**
+   * Rotating the pauser is an ownership decision, not a pauser one. A self-rotating pauser could
+   * hand the brake to an account of its choosing — or, having been compromised, keep the owner from
+   * taking it back — so `updatePauser` is gated on `onlyOwner` and the sitting pauser is refused.
+   */
+  test('updatePauser is refused for the sitting pauser', async () => {
+    await expect(
+      client.send.updatePauser({
+        args: { _newPauser: newPauser.addr.toString() },
+        sender: deployer.addr,
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    expect(await client.state.global._pauser()).toBe(deployer.addr.toString())
+  })
+
+  /**
+   * The zero address is refused because there is no way back: assigning it would leave `pause` and
+   * `unpause` permanently uncallable, and `updatePauser` itself is owner-gated rather than
+   * pauser-gated only for the owner to still be able to repair it. Guards against the role being
+   * burned by a defaulted or truncated argument.
+   */
+  test('updatePauser refuses the zero address', async () => {
+    await expect(
+      client.send.updatePauser({
+        args: { _newPauser: ZERO_ADDRESS },
+        sender: contractOwner.addr,
+      }),
+    ).rejects.toThrow('ADDRESS_NOT_ALLOWED')
+
+    expect(await client.state.global._pauser()).toBe(deployer.addr.toString())
+  })
+
+  /**
+   * The owner rotates the pauser to a fresh account. Positive control for the two rejections
+   * above — the same call, from the owner and with a real address, goes through — and the
+   * PauserChanged event is what an off-chain watcher keys on to track who holds the brake. The
+   * event is matched on its payload rather than by re-deriving the ARC-28 selector.
+   */
+  test('The owner rotates the pauser', async () => {
+    const result = await client.send.updatePauser({
+      args: { _newPauser: newPauser.addr.toString() },
+      sender: contractOwner.addr,
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    expect(await client.state.global._pauser()).toBe(newPauser.addr.toString())
+
+    const emitted = (result.confirmation.logs ?? []).some((log) =>
+      Buffer.from(log).subarray(4).equals(newPauser.addr.publicKey),
+    )
+    expect(emitted).toBe(true)
+  })
+
+  /**
+   * A rotation that left the outgoing pauser able to pause would be no rotation at all, so the
+   * previous holder is refused and the flag stays clear.
+   */
+  test('The replaced pauser can no longer pause', async () => {
+    await expect(client.send.pause({ args: [], sender: deployer.addr })).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    expect(await client.state.global.paused()).toEqual(0n)
+  })
+
+  /**
+   * The other half of the rotation: the incoming pauser holds a working brake, both directions.
+   */
+  test('The new pauser can pause and unpause', async () => {
+    const paused = await client.send.pause({ args: [], sender: newPauser.addr })
+    expect(paused.confirmation.poolError).toBe('')
+    expect(await client.state.global.paused()).toEqual(1n)
+
+    const unpaused = await client.send.unpause({ args: [], sender: newPauser.addr })
+    expect(unpaused.confirmation.poolError).toBe('')
+    expect(await client.state.global.paused()).toEqual(0n)
   })
 })

@@ -21,7 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-import { Account, assert, Contract, emit, Global, GlobalState, Txn } from '@algorandfoundation/algorand-typescript'
+import { Account, assert, emit, Global, GlobalState, Txn } from '@algorandfoundation/algorand-typescript'
+import { Ownable } from './ownable.algo'
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- ARC28 event with no fields
 type Pause = {}
@@ -29,7 +30,7 @@ type Pause = {}
 type Unpause = {}
 type PauserChanged = { newAddress: Account }
 
-export class Pausable extends Contract {
+export class Pausable extends Ownable {
   // ============ State Variables ============
   public _pauser = GlobalState<Account>()
 
@@ -40,14 +41,14 @@ export class Pausable extends Contract {
    * @dev Modifier to make a function callable only when the contract is not paused.
    */
   protected whenNotPaused(): void {
-    assert(!this.paused.value)
+    assert(!this.paused.value, 'CONTRACT_PAUSED')
   }
 
   /**
    * @dev throws if called by any account other than the pauser
    */
   protected onlyPauser(): void {
-    assert(Txn.sender === this._pauser.value)
+    assert(Txn.sender === this._pauser.value, 'SENDER_NOT_ALLOWED')
   }
 
   // ============ Read Only ============
@@ -84,9 +85,9 @@ export class Pausable extends Contract {
    * @dev update the pauser role
    */
   public updatePauser(_newPauser: Account): void {
-    this.onlyPauser()
+    this.onlyOwner()
 
-    assert(_newPauser !== Global.zeroAddress)
+    assert(_newPauser !== Global.zeroAddress, 'ADDRESS_NOT_ALLOWED')
     this._pauser.value = _newPauser
     emit<PauserChanged>({ newAddress: this._pauser.value })
   }
