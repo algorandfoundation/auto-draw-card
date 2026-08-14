@@ -6,7 +6,7 @@ An Algorand smart-contract project (built with [AlgoKit](https://github.com/algo
 
 This project is built around a **Main** contract that "generates" a new address for each card that's created. Every card is a rekeyed account controlled by the contract.
 
-All minimum balance requirements (MBR) — box storage, account minimum balances and asset opt-in MBR — are **pre-funded by the contract owner**. Callers never attach MBR payments. When a card is closed, the freed MBR returns to the contract and the owner can reclaim it with `recoverAsset`. When a card opts out of an asset (`cardDisableAsset`), the freed opt-in MBR stays within the card account.
+All minimum balance requirements (MBR) — box storage, account minimum balances and asset opt-in MBR — are **pre-funded by the contract owner**. Callers never attach MBR payments: `cardAssetOptIn` tops a card up from the contract escrow if it cannot cover the opt-in itself. MBR flows back the same way. When a card is closed, the freed MBR returns to the contract and the owner can reclaim it with `recoverAsset`. When a card opts out of an asset (`cardDisableAsset`), the freed opt-in MBR — along with any other surplus Algo on the card — is swept back to the contract too.
 
 Two auxiliary contracts support an automated draw ("AutoDraw") flow on top of the Main contract:
 
@@ -103,7 +103,7 @@ Partner-only. Generates a brand new rekeyed account for the given card holder an
 
 #### cardAssetOptIn(address,uint64)void
 
-Partner-only. Opts a card into an asset. The card's minimum balance requirement must be met prior to calling.
+Partner-only. Opts a card into an asset, funding any shortfall in the card's minimum balance requirement from the contract escrow — the caller does not have to pre-fund the card. Fails with `ASSET_ALREADY_ENABLED` if the card already holds the asset, so a redundant opt-in costs nothing.
 
 #### cardClose(address)void
 
@@ -115,7 +115,7 @@ Owner-only. Reassigns a card to a new card holder and emits `CardRecovered`. Any
 
 #### cardDisableAsset(address,uint64)void
 
-Partner or card holder. Closes the card out of an asset; the freed MBR stays within the card account. Also revokes the card holder's AutoDraw delegation for that asset, via an inner `killFor` call to the registered killswitch app — so callers must budget roughly 1_000 µAlgos of extra fee. Revocation is best-effort: an asset the holder never delegated closes out normally.
+Partner or card holder. Closes the card out of an asset and sweeps the Algo the card no longer needs — the freed opt-in MBR plus any other surplus — back to the contract, leaving the card at exactly its remaining minimum balance. Also revokes the card holder's AutoDraw delegation for that asset, via an inner `killFor` call to the registered killswitch app. Three inner transactions in total, so callers must budget roughly 3_000 µAlgos of extra fee. Revocation is best-effort: an asset the holder never delegated closes out normally.
 
 This is where delegation cleanup belongs because it is unavoidable. A card cannot be closed while it still holds an ASA, so every asset a card ever held passes through this method, and it is the point at which the asset can no longer be drawn into the card.
 
@@ -302,7 +302,8 @@ sequenceDiagram
     deactivate Contract
     User->>Contract: cardDisableAsset()
     activate Contract
-    Card-->>Card: CloseOut Asset (MBR stays in card)
+    Card-->>Card: CloseOut Asset
+    Card-->>Contract: pay (freed OptIn MBR + surplus)
     Contract->>Killswitch: killFor(cardHolder, asset)
     deactivate Contract
     Partner->>Contract: cardClose()

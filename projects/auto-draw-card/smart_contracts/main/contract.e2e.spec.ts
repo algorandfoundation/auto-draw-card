@@ -404,22 +404,72 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Happy path for the `cardAssetOptIn` guard, called directly rather than through
-   * `cardCreate`. Re-opting an already-opted-in card into the same asset is a no-op axfer that
-   * costs no extra MBR, so this isolates "the card box exists, therefore the guard passes"
-   * from the asset bookkeeping.
+   * Re-opting an already-opted-in card into the same asset is rejected. The call could only
+   * repeat work already done, and rejecting means it costs neither MBR nor inner-transaction
+   * fees. The card created above is opted into FakeUSDC, so this is the second opt-in.
    */
-  test('cardAssetOptIn succeeds for an existing card', async () => {
-    const result = await appClient.send.cardAssetOptIn({
-      args: {
-        card: newCardAddress,
-        asset: fakeUSDC,
-      },
+  test('cardAssetOptIn fails for an already-enabled asset', async () => {
+    await expect(
+      appClient.send.cardAssetOptIn({
+        args: {
+          card: newCardAddress,
+          asset: fakeUSDC,
+        },
+        sender: owner.addr,
+        staticFee: AlgoAmount.MicroAlgos(3_000),
+      }),
+    ).rejects.toThrow('ASSET_ALREADY_ENABLED')
+  })
+
+  /**
+   * `cardAssetOptIn` sponsors the opt-in MBR itself, so a card holding nothing beyond its base
+   * minimum balance can still be opted into an asset without the partner pre-funding it.
+   *
+   * The card here is created with no asset, so it is funded to exactly its base minimum balance
+   * and has no room for an asset slot. The contract must cover the shortfall from its escrow —
+   * without that top-up the inner opt-in transfer would fail on minimum balance. The fee covers
+   * both inner transactions: the top-up payment and the opt-in transfer.
+   */
+  test('cardAssetOptIn funds the opt-in MBR from the contract escrow', async () => {
+    const { algorand } = fixture.context
+
+    const created = await appClient.send.cardCreate({
+      args: { cardOwner: user2.addr.toString(), asset: 0 },
       sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(4_000),
+    })
+    const unfundedCard = created.return!
+
+    // The card sits exactly at its minimum balance: there is nothing spare to pay for an
+    // asset slot with.
+    const before = await algorand.account.getInformation(unfundedCard)
+    expect(before.balance.microAlgos).toEqual(before.minBalance.microAlgos)
+
+    const result = await appClient.send.cardAssetOptIn({
+      args: { card: unfundedCard, asset: fakeUSDC },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(3_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    // The opt-in landed and the contract topped the card up to cover it exactly.
+    const holding = await algorand.asset.getAccountInformation(unfundedCard, fakeUSDC)
+    expect(holding.balance).toEqual(0n)
+
+    const after = await algorand.account.getInformation(unfundedCard)
+    expect(after.minBalance.microAlgos).toBeGreaterThan(before.minBalance.microAlgos)
+    expect(after.balance.microAlgos).toEqual(after.minBalance.microAlgos)
+
+    // Tidy up so the card does not linger into the destroy test.
+    await appClient.send.cardDisableAsset({
+      args: { card: unfundedCard, asset: fakeUSDC },
+      sender: user2.addr,
+      staticFee: AlgoAmount.MicroAlgos(4_000),
+    })
+    await appClient.send.cardClose({
+      args: { card: unfundedCard },
       staticFee: AlgoAmount.MicroAlgos(2_000),
     })
-
-    expect(result.confirmation.poolError).toBe('')
   })
 
   /**
@@ -808,20 +858,33 @@ describe('Auto-Draw Card', () => {
    * card account can be closed, since Algorand forbids closing an account still opted into
    * an asset.
    *
-   * The fee covers the inner `killFor` call alongside the opt-out transfer: this holder never
+   * The fee covers three inner transactions alongside the app call: the opt-out transfer, the
+   * sweep of the freed MBR back to the contract, and the `killFor` revocation. This holder never
    * enabled an AutoDraw delegation, but the revocation is attempted on every opt-out.
    */
   test('Disable FakeUSDC for card', async () => {
+    const { algorand } = fixture.context
+
+    const appBefore = (await algorand.account.getInformation(appClient.appAddress)).balance.microAlgos
+
     const result = await appClient.send.cardDisableAsset({
       args: {
         card: newCardAddress,
         asset: fakeUSDC,
       },
       sender: user2.addr,
-      staticFee: AlgoAmount.MicroAlgos(3_000),
+      staticFee: AlgoAmount.MicroAlgos(4_000),
     })
 
     expect(result.confirmation.poolError).toBe('')
+
+    // The freed asset slot came back to the contract rather than sitting idle on the card, and
+    // the card was left holding exactly its remaining minimum balance.
+    const cardInfo = await algorand.account.getInformation(newCardAddress)
+    expect(cardInfo.balance.microAlgos).toEqual(cardInfo.minBalance.microAlgos)
+
+    const appAfter = (await algorand.account.getInformation(appClient.appAddress)).balance.microAlgos
+    expect(appAfter).toBeGreaterThan(appBefore)
   })
 
   /**
@@ -1405,7 +1468,8 @@ describe('Auto-Draw Card', () => {
    * must not leave a live delegation behind, and revoking consent can only ever narrow what may
    * be drawn.
    *
-   * The extra 1_000 microAlgos over a plain opt-out covers the inner `killFor` call.
+   * The fee covers three inner transactions: the opt-out transfer, the sweep of the freed MBR
+   * back to the contract, and the `killFor` revocation.
    */
   test('AutoDraw: disable FakeUSDC for card revokes the holder delegation', async () => {
     const authorized = await ksClient.send.authorize({
@@ -1420,7 +1484,7 @@ describe('Auto-Draw Card', () => {
         asset: fakeUSDC,
       },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(3_000),
+      staticFee: AlgoAmount.MicroAlgos(4_000),
     })
 
     expect(result.confirmation.poolError).toBe('')
@@ -1637,7 +1701,7 @@ describe('Auto-Draw Card', () => {
     await appClient.send.cardDisableAsset({
       args: { card: bindingCardB, asset: fakeUSDC },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(3_000),
+      staticFee: AlgoAmount.MicroAlgos(4_000),
     })
     const closed = await appClient.send.cardClose({
       args: { card: bindingCardB },
@@ -1661,7 +1725,7 @@ describe('Auto-Draw Card', () => {
     await appClient.send.cardDisableAsset({
       args: { card: bindingCardA, asset: fakeUSDC },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(3_000),
+      staticFee: AlgoAmount.MicroAlgos(4_000),
     })
 
     const closed = await appClient.send.cardClose({

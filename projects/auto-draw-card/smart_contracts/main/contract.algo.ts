@@ -241,7 +241,9 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   }
 
   /**
-   * Opt-in a card into an asset. Minimum balance requirement must be met prior to calling this function.
+   * Opt-in a card into an asset. Any shortfall in the card's minimum balance requirement is
+   * topped up from the contract escrow, so the caller does not have to pre-fund the card.
+   * A card already opted into the asset is rejected, since the call would do nothing.
    * Only the partner can call this function.
    * @param card Card address
    * @param asset Asset to opt-in to
@@ -249,6 +251,23 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   public cardAssetOptIn(card: Account, asset: Asset): void {
     this.onlyPartner()
     assert(this.cards(card).exists, 'CARD_NOT_FOUND')
+
+    // Reject a card already holding the asset rather than repeating the opt-in: the call would
+    // change nothing, and rejecting keeps it from costing anything at all.
+    const [, alreadyOptedIn] = op.AssetHolding.assetBalance(card, asset)
+    assert(!alreadyOptedIn, 'ASSET_ALREADY_ENABLED')
+
+    // Opting in raises the card's MBR by one asset slot, so cover any shortfall up front from
+    // the contract escrow — the opt-in itself would otherwise fail.
+    const required: uint64 = card.minBalance + Global.assetOptInMinBalance
+    if (card.balance < required) {
+      itxn
+        .payment({
+          receiver: card,
+          amount: required - card.balance,
+        })
+        .submit()
+    }
 
     itxn
       .assetTransfer({
@@ -265,6 +284,17 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     })
   }
 
+  /**
+   * Close a card out of an asset and sweep the Algo it no longer needs back to the contract.
+   *
+   * The close-out drops the card's MBR by one asset slot, so the sponsorship that funded that slot
+   * would otherwise sit idle on the card. Reading the balance after the close-out inner
+   * transaction picks up the reduced requirement, so the sweep also returns any other surplus the
+   * card has accumulated, and always leaves the card exactly at its remaining MBR.
+   *
+   * @param card Card address
+   * @param asset Asset to close out of
+   */
   private cardAssetCloseOut(card: Account, asset: Asset): void {
     itxn
       .assetTransfer({
@@ -275,6 +305,16 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
         assetAmount: 0,
       })
       .submit()
+
+    if (card.balance > card.minBalance) {
+      itxn
+        .payment({
+          sender: card,
+          receiver: Global.currentApplicationAddress,
+          amount: card.balance - card.minBalance,
+        })
+        .submit()
+    }
 
     emit<CardAssetDisabled>({
       card: card,
@@ -678,7 +718,8 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   // ===== Card Holder Methods =====
   /**
    * Allows the card holder (or partner) to CloseOut of an asset, reducing the minimum balance
-   * requirement of the account. The freed MBR remains within the card account.
+   * requirement of the account. The freed MBR — along with any other surplus Algo on the card —
+   * is swept back to the contract escrow that sponsored it.
    *
    * The holder's AutoDraw delegation for the asset goes with it. Opting the card out is the point
    * at which the asset can no longer be drawn into it, and it is the only chokepoint that catches
