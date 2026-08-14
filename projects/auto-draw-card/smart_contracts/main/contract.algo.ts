@@ -321,7 +321,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
   public deploy(owner: Account, omnibus: Account): Account {
     this._transferOwnership(owner)
-    this.setOmnibusAddress(omnibus)
+    this.omnibus_address.value = omnibus
     this._pauser.value = Txn.sender
 
     // puya-ts does not auto-zero-init GlobalState, so set the counters explicitly
