@@ -8,6 +8,8 @@ This project is built around a **Main** contract that "generates" a new address 
 
 All minimum balance requirements (MBR) — box storage, account minimum balances and asset opt-in MBR — are **pre-funded by the contract owner**. Callers never attach MBR payments: `cardAssetOptIn` tops a card up from the contract escrow if it cannot cover the opt-in itself. MBR flows back the same way. When a card is closed, the freed MBR returns to the contract and the owner can reclaim it with `recoverAsset`. When a card opts out of an asset (`cardDisableAsset`), the freed opt-in MBR — along with any other surplus Algo on the card — is swept back to the contract too.
 
+The contract also controls a **refund treasury** — another rekeyed account, used to pay out signed refund batches (see [Refunds](#refunds)). It follows the same MBR pattern: created and funded from the contract escrow on its first asset opt-in (`treasuryAssetOptIn`), swept back to the contract on close-out (`treasuryAssetCloseOut`) and when the contract is destroyed.
+
 Two auxiliary contracts support an automated draw ("AutoDraw") flow on top of the Main contract:
 
 - **Main** ([smart_contracts/main/contract.algo.ts](./smart_contracts/main/contract.algo.ts)) — the card-management application. Documented under [Main contract](#main-contract).
@@ -16,10 +18,11 @@ Two auxiliary contracts support an automated draw ("AutoDraw") flow on top of th
 
 ## Roles
 
-- **Owner** — administers the contract: recovers cards, authorizes withdraw operators, configures the contract (partner address, omnibus address, killswitch app, withdrawal timeout, withdrawal public key), and reclaims MBR. Inherited from `Ownable` and transferable via `transferOwnership`.
+- **Owner** — administers the contract: recovers cards, authorizes withdraw and refund operators, configures the contract (partner address, omnibus address, killswitch app, withdrawal timeout, withdrawal and refund public keys), manages the refund treasury and refund pause, and reclaims MBR. Inherited from `Ownable` and transferable via `transferOwnership`.
 - **Partner** — operates the card lifecycle: creates/closes cards and opts cards in/out of assets. Set by the owner via `setPartnerAddress`.
 - **Withdraw operator** — debits cards to the omnibus address via `cardDebit`. Authorized and revoked by the owner (`addWithdrawOperator` / `removeWithdrawOperator`), so debit processing can run from an operational key that holds no other privileges.
-- **Pauser** — can `pause`/`unpause` the contract, halting debits. Inherited from `Pausable` and updatable via `updatePauser`.
+- **Refund operator** — submits signed refund batches via `cardRefund`, paying recipients out of the treasury. Authorized and revoked by the owner (`addRefundOperator` / `removeRefundOperator`); the operator can only submit batches Partner has signed, never mint its own.
+- **Pauser** — can `pause`/`unpause` the contract, halting debits. Inherited from `Pausable` and updatable via `updatePauser`. (Refunds have a separate, owner-gated pause — see [Refunds](#refunds).)
 - **Card holder** — the account assigned as a card's `owner`. Can close the card, opt the card out of assets, and initiate/cancel/execute withdrawals.
 
 ## Design assumptions
@@ -41,7 +44,7 @@ The card-management application. Its methods are grouped below.
 
 #### deploy(address,address)address
 
-Deploy the contract, setting the first address as the owner and the second as the omnibus address. The transaction sender becomes the initial pauser. Returns the contract application address.
+Deploy the contract, setting the first address as the owner and the second as the omnibus address. The transaction sender becomes the initial pauser. Returns the contract application address. The refund treasury starts as the zero address — it is created by the first `treasuryAssetOptIn`, since the app account holds nothing to fund it with at creation time.
 
 #### update()void
 
@@ -49,7 +52,7 @@ Allows the owner to update the contract.
 
 #### destroy()void
 
-Destroy the contract, returning all Algo to the owner. Only possible when there are no active cards.
+Destroy the contract, returning all Algo to the owner — including anything left on the treasury, which is closed back to the contract first (the treasury is rekeyed to the app, so its balance would otherwise be stranded behind a deleted authorizer). Only possible when there are no active cards, and the treasury must already be closed out of every asset.
 
 #### transferOwnership(address)void / owner()address
 
@@ -151,6 +154,44 @@ Card holder. Executes a pending permissionless withdrawal once the wait time has
 
 Card holder. Executes a withdrawal before the wait time elapses, authorized by an ed25519 signature from the withdrawal public key. Args: `card, asset, amount, expiresAt, nonce, signature`.
 
+### Refunds
+
+Refunds compensate card debits that have already settled on chain. A `cardDebit` inner transfer is final once committed, so a refund is a _forward_ payment out of a dedicated **treasury** account — a rekeyed contract-controlled account, like a card — rather than a reversal out of the omnibus. Refund batches are authorized off-chain: Partner signs the batch with the refund signer key (registered via `setRefundSignerPubkey`), and an authorized refund operator submits it.
+
+Refunds carry their own pause switch (`refund_paused`), separate from the contract-wide `paused` flag, so halting refunds does not halt debits and vice versa. Unlike the contract-wide pause it is owner-gated rather than carrying its own pauser role.
+
+#### treasuryAssetOptIn(uint64)address
+
+Owner-only. Opts the treasury into an asset so refunds of that asset can be paid from it, and returns the treasury address (also readable via the `treasury` global state). The first call creates the treasury: a freshly rekeyed account must be funded to its minimum balance in the same group as its rekey, and the app account is unfunded at creation time, so the first opt-in creates, rekeys and funds it from the contract escrow in one call — four inner transactions; later opt-ins need at most two. Any minimum-balance shortfall is always covered from the escrow, and a redundant opt-in fails with `ASSET_ALREADY_ENABLED`.
+
+#### treasuryAssetCloseOut(uint64,address)void
+
+Owner-only. Closes the treasury out of an asset, sending any remaining balance — live refund float, unlike a card's drained holding — to the given `closeTo` account, which must already hold the asset. The freed opt-in MBR plus any surplus Algo is swept back to the contract, leaving the treasury at exactly its remaining minimum balance. Args: `asset, closeTo`.
+
+#### cardRefund((address,uint64)[],uint64,uint64,uint64,byte[64])void
+
+Refund-operator only, when refunds are not paused. Pays a signed batch of up to 16 `(recipient, amount)` transfers of one asset out of the treasury. Args: `transfers, asset, expiresAt, nonce, signature`.
+
+The contract rebuilds the signed payload from its own state — treasury address, genesis hash — plus the call arguments, SHA-256 hashes its ARC-4 encoding, and verifies the ed25519 signature against the refund signer key, so a signature minted for a different treasury, network, batch or nonce cannot verify here. The treasury nonce makes each signature single-use, and the batch is atomic: every recipient is paid or none is. Zero amounts are counted but not transferred. Emits one `Refund` event summarizing the batch (`treasury, asset, count, total, expiresAt, nonce`).
+
+Two group-level requirements are the caller's to satisfy: every recipient holding plus the treasury holding must be made available through the group's account references (four accounts per app call, shared group-wide, so a full 16-recipient batch needs four extra pad app calls — which also raise the group's pooled inner-transaction and opcode budgets), and the group must carry one minimum fee per inner transaction: the transfers themselves plus whatever `ensureBudget` issues to buy opcode budget for the signature check.
+
+#### pauseRefund()void / unpauseRefund()void
+
+Owner-only. Halt or resume refunds without touching the contract-wide pause. State readable via the `refund_paused` global.
+
+#### setRefundSignerPubkey(byte[32])void
+
+Owner-only. Set the ed25519 public key refund batch signatures are verified against. Rotating it invalidates every unsubmitted signature, which is the intended emergency response.
+
+#### addRefundOperator(address)void / removeRefundOperator(address)void
+
+Owner-only. Grant or revoke an account's permission to submit `cardRefund` batches, via a box keyed by that account (MBR owner-funded, released on removal).
+
+#### getNextTreasuryNonce()uint64
+
+Read the next treasury nonce, needed to sign a refund batch.
+
 ## Killswitch contract
 
 A standalone application ([smart_contracts/killswitch/contract.algo.ts](./smart_contracts/killswitch/contract.algo.ts)) that maintains an opt-in registry of `(account, asset)` pairs allowed to use the AutoDraw delegation. It lets a card holder enable AutoDraw per asset and, crucially, disable ("kill") it at any time. It inherits `Ownable`, `Pausable` and `Recoverable`, so it also supports `transferOwnership`, `pause`/`unpause`/`updatePauser`, and `recoverAsset`.
@@ -200,17 +241,22 @@ classDiagram
     MainContract : +box cards
     MainContract : +box withdrawals
     MainContract : +box withdraw_operators
+    MainContract : +box refund_operators
     MainContract : +int cards_active_count
     MainContract : +int withdrawal_wait_time
     MainContract : +bytes withdrawal_pubkey
+    MainContract : +bytes refund_pubkey
     MainContract : +address partner_address
     MainContract : +address omnibus_address
     MainContract : +int killswitch_app
+    MainContract : +struct treasury
+    MainContract : +bool refund_paused
     MainContract : deploy()
 
     MainContract <|-- Owner
     MainContract <|-- Partner
     MainContract <|-- WithdrawOperator
+    MainContract <|-- RefundOperator
     MainContract <|-- Pauser
     MainContract <|-- CardHolder
 
@@ -228,6 +274,12 @@ classDiagram
         addWithdrawOperator()
         removeWithdrawOperator()
         cardRecover()
+        pauseRefund() / unpauseRefund()
+        setRefundSignerPubkey()
+        addRefundOperator()
+        removeRefundOperator()
+        treasuryAssetOptIn()
+        treasuryAssetCloseOut()
     }
 
     class Partner {
@@ -239,6 +291,10 @@ classDiagram
 
     class WithdrawOperator {
         cardDebit()
+    }
+
+    class RefundOperator {
+        cardRefund()
     }
 
     class Pauser {
@@ -295,6 +351,16 @@ sequenceDiagram
     deactivate Contract
     Partner-->>Visa/MC: Yes
     Visa/MC-->>Merchant: Yes
+    Partner->>Contract: treasuryAssetOptIn()
+    activate Contract
+    create participant Treasury
+    Contract-->>Treasury: Create + Fund MBR, OptIn Asset
+    deactivate Contract
+    Partner->>Treasury: Axfer (Refund float)
+    Partner->>Contract: cardRefund() (as refund operator, signed batch)
+    activate Contract
+    Treasury-->>User: axfer (Refund)
+    deactivate Contract
     User->>Contract: withdrawalRequest()
     User->>Contract: withdraw()
     activate Contract
@@ -350,4 +416,4 @@ Note that a method's JSDoc becomes its `desc` in the ARC-56 app spec, so editing
 
 ### Testing
 
-Tests run with [vitest](https://vitest.dev/). The end-to-end suite ([smart_contracts/main/contract.e2e.spec.ts](./smart_contracts/main/contract.e2e.spec.ts)) deploys the contracts to `algokit localnet` and exercises the full card lifecycle (create, debit, withdraw, AutoDraw, recover) on a real network, so LocalNet must be running before `pnpm test`.
+Tests run with [vitest](https://vitest.dev/). The end-to-end suite ([smart_contracts/main/contract.e2e.spec.ts](./smart_contracts/main/contract.e2e.spec.ts)) deploys the contracts to `algokit localnet` and exercises the full card lifecycle (create, debit, withdraw, AutoDraw, recover, refund) on a real network, so LocalNet must be running before `pnpm test`.

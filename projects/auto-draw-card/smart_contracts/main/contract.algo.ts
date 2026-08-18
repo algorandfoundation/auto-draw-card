@@ -134,8 +134,20 @@ type RefundPause = {}
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- ARC28 event with no fields
 type RefundUnpause = {}
 
-type CardRefunded = {
-  card: Account
+type TreasuryAssetEnabled = {
+  treasury: Account
+  asset: Asset
+}
+
+type TreasuryAssetDisabled = {
+  treasury: Account
+  asset: Asset
+}
+
+// One event per refund batch, not per recipient: the individual recipient/amount pairs are
+// already on chain in the call's `transfers` argument and the inner transfers themselves.
+type Refund = {
+  treasury: Account
   asset: Asset
   count: uint64
   total: uint64
@@ -218,7 +230,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   public withdrawal_wait_time = GlobalState<uint64>({ key: 'wwt' })
 
   // Permissioned withdrawal public key
-  public withdrawal_pubkey = GlobalState<bytes<32>>({ key: 'wpk' })
+  public withdrawal_pubkey = GlobalState<bytes<32>>({ key: 'pwpk' })
 
   // Withdrawal requests
   // Only one allowed at any given point. MBR is sponsored by the contract owner (app account).
@@ -463,9 +475,11 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   // ========== External Methods ==========
   /**
    * Deploy the contract, setting the owner as provided and initializing global state.
+   * The refund treasury is not created here — see treasuryAssetOptIn — so it starts as the
+   * zero address.
    */
   @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
-  public deploy(owner: Account, omnibus: Account) {
+  public deploy(owner: Account, omnibus: Account): Account {
     this._transferOwnership(owner)
     this.omnibus_address.value = omnibus
     this._pauser.value = Txn.sender
@@ -476,29 +490,17 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     this.paused.value = false
     this.refund_paused.value = false
 
-    // Create treasury
-    const treasury: Treasury = {
+    // The refund treasury cannot be created at deploy time: a freshly rekeyed account must be
+    // funded to its minimum balance within the same group as the rekey (the ledger refuses a
+    // non-empty account below the minimum), and the app account holds nothing to fund it with
+    // until after creation. The first treasuryAssetOptIn creates it instead, once the escrow
+    // is funded.
+    this.treasury.value = {
       address: Global.zeroAddress,
       nonce: 0,
     }
 
-    const controlledAddr = compile(ControlledAddress)
-    treasury.address = arc4.abiCall<typeof ControlledAddress.prototype.new>({
-      approvalProgram: controlledAddr.approvalProgram,
-      clearStateProgram: controlledAddr.clearStateProgram,
-      onCompletion: OnCompleteAction.DeleteApplication,
-    }).returnValue
-
-    itxn
-      .payment({
-        receiver: treasury.address,
-        amount: Global.minBalance,
-      })
-      .submit()
-
-    this.treasury.value = clone(treasury)
-
-    return { appAddr: Global.currentApplicationAddress, treasury }
+    return Global.currentApplicationAddress
   }
 
   /**
@@ -510,7 +512,9 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   }
 
   /**
-   * Destroy the smart contract, sending all Algo to the owner account. This can only be done if there are no active cards
+   * Destroy the smart contract, sending all Algo — including anything left on the treasury — to
+   * the owner account. This can only be done if there are no active cards, and the treasury must
+   * already be closed out of every asset (an account holding an ASA cannot be closed).
    */
   @abimethod({ allowActions: ['DeleteApplication'] })
   public destroy(): void {
@@ -518,6 +522,23 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
 
     // There must not be any active card
     assert(!this.cards_active_count.value, 'CARDS_STILL_ACTIVE')
+
+    // The treasury is rekeyed to this app, so anything left on it must come home before the app
+    // disappears — afterwards its authorizer no longer exists and the balance is stranded
+    // forever. A treasury that was never created is still the zero address and must not be
+    // touched at all (on MainNet the zero address holds a balance, and an inner close from it
+    // would fail and brick destroy).
+    const treasuryAddress = this.treasury.value.address
+    if (treasuryAddress !== Global.zeroAddress) {
+      itxn
+        .payment({
+          sender: treasuryAddress,
+          receiver: Global.currentApplicationAddress,
+          amount: 0,
+          closeRemainderTo: Global.currentApplicationAddress,
+        })
+        .submit()
+    }
 
     itxn
       .payment({
@@ -1009,10 +1030,117 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     return this.treasury.value.nonce
   }
 
-  // TODO: add opt-in and close-out asset methods for the treasury
+  /**
+   * Opt the treasury into an asset so refunds of that asset can be paid from it, creating the
+   * treasury account on the first call. Any shortfall in the treasury's minimum balance
+   * requirement is topped up from the contract escrow, so the caller does not have to fund the
+   * treasury directly.
+   * A treasury already opted into the asset is rejected, since the call would do nothing.
+   * Only the owner of the contract can call this method.
+   * @param asset Asset to opt-in to
+   * @returns The treasury account address
+   */
+  public treasuryAssetOptIn(asset: Asset): Account {
+    this.onlyOwner()
+
+    // The treasury is created lazily, on the first opt-in rather than at deploy time: a freshly
+    // rekeyed account must be funded to its minimum balance within the same group as the rekey,
+    // and at creation the app account holds nothing to fund it with. By the first opt-in the
+    // escrow is funded, so the account is created, rekeyed and funded in one breath — the same
+    // pattern as cardCreate.
+    if (this.treasury.value.address === Global.zeroAddress) {
+      const controlledAddr = compile(ControlledAddress)
+      this.treasury.value.address = arc4.abiCall<typeof ControlledAddress.prototype.new>({
+        approvalProgram: controlledAddr.approvalProgram,
+        clearStateProgram: controlledAddr.clearStateProgram,
+        onCompletion: OnCompleteAction.DeleteApplication,
+      }).returnValue
+    }
+
+    const treasuryAddress = this.treasury.value.address
+
+    const [, alreadyOptedIn] = op.AssetHolding.assetBalance(treasuryAddress, asset)
+    assert(!alreadyOptedIn, 'ASSET_ALREADY_ENABLED')
+
+    // A just-created treasury is not on the ledger yet — it exists only once funded — and the
+    // plain account balance properties refuse to read an account that does not exist. Read via
+    // the non-asserting ops instead, flooring the requirement at the base account minimum so
+    // the first top-up funds the account into existence along with its asset slot.
+    const [balance] = op.AcctParams.acctBalance(treasuryAddress)
+    const [minBalance, funded] = op.AcctParams.acctMinBalance(treasuryAddress)
+    const base: uint64 = funded && minBalance > Global.minBalance ? minBalance : Global.minBalance
+    const required: uint64 = base + Global.assetOptInMinBalance
+    if (balance < required) {
+      itxn
+        .payment({
+          receiver: treasuryAddress,
+          amount: required - balance,
+        })
+        .submit()
+    }
+
+    itxn
+      .assetTransfer({
+        sender: treasuryAddress,
+        assetReceiver: treasuryAddress,
+        xferAsset: asset,
+        assetAmount: 0,
+      })
+      .submit()
+
+    emit<TreasuryAssetEnabled>({
+      treasury: treasuryAddress,
+      asset: asset,
+    })
+
+    return treasuryAddress
+  }
 
   /**
-   * Refunds a card debit that has already settled on chain, by paying the amount out of the
+   * Close the treasury out of an asset, sending any remaining balance of that asset to
+   * `closeTo`, and sweep the Algo the treasury no longer needs back to the contract escrow.
+   *
+   * Unlike a card close-out, the remaining asset balance here is live refund float rather than
+   * an already-drained holding, so it goes to an explicit recipient — which must already hold
+   * the asset. The sweep reads the balance after the close-out, so it returns the freed
+   * asset-slot MBR plus any other surplus and leaves the treasury at exactly its remaining
+   * minimum balance.
+   * Only the owner of the contract can call this method.
+   * @param asset Asset to close out of
+   * @param closeTo Account receiving the treasury's remaining balance of the asset
+   */
+  public treasuryAssetCloseOut(asset: Asset, closeTo: Account): void {
+    this.onlyOwner()
+    const treasuryAddress = this.treasury.value.address
+
+    itxn
+      .assetTransfer({
+        sender: treasuryAddress,
+        assetReceiver: closeTo,
+        assetCloseTo: closeTo,
+        xferAsset: asset,
+        assetAmount: 0,
+      })
+      .submit()
+
+    if (treasuryAddress.balance > treasuryAddress.minBalance) {
+      itxn
+        .payment({
+          sender: treasuryAddress,
+          receiver: Global.currentApplicationAddress,
+          amount: treasuryAddress.balance - treasuryAddress.minBalance,
+        })
+        .submit()
+    }
+
+    emit<TreasuryAssetDisabled>({
+      treasury: treasuryAddress,
+      asset: asset,
+    })
+  }
+
+  /**
+   * Refunds card debits that have already settled on chain, by paying the amounts out of the
    * treasury against a signature provided by partner.
    *
    * This is a compensating payment, not a rollback: a cardDebit inner transfer is final once
@@ -1045,12 +1173,16 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     assert(!this.refund_paused.value, 'REFUND_PAUSED')
     assert(this.refund_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
 
+    // The treasury exists only once the first treasuryAssetOptIn has created it; until then a
+    // refund could only fail deep in the inner transfer with an opaque error, so short-circuit
+    // with a clear one.
     const treasuryAddress = this.treasury.value.address
+    assert(treasuryAddress !== Global.zeroAddress, 'TREASURY_NOT_FOUND')
 
     const count: uint64 = transfers.length
     assert(count > 0, 'NO_TRANSFERS')
     assert(count <= MaxRefundTransfers, 'TOO_MANY_TRANSFERS')
-    assert(Global.latestTimestamp < expiresAt, 'WITHDRAWAL_TIME_INVALID')
+    assert(Global.latestTimestamp < expiresAt, 'REFUND_TIME_INVALID')
     assert(this.treasury.value.nonce === nonce, 'NONCE_INVALID')
 
     // Rebuilt from state rather than from caller input, so a signature minted against a
@@ -1096,8 +1228,8 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
       total = total + amount
     }
 
-    emit<CardRefunded>({
-      card: treasuryAddress,
+    emit<Refund>({
+      treasury: treasuryAddress,
       asset: asset,
       count: count,
       total: total,

@@ -29,6 +29,36 @@ function ed25519SignDetached(message: Uint8Array, secretKey: Uint8Array): Uint8A
   return new Uint8Array(cryptoSign(null, Buffer.from(message), key))
 }
 
+// The exact ARC-4 shape `cardRefund` rebuilds and hashes on-chain: treasury, asset, expiresAt,
+// nonce, genesisHash, transfers.
+const REFUND_BATCH_ABI_TYPE = algosdk.ABIType.from('(address,uint64,uint64,uint64,byte[32],(address,uint64)[])')
+
+/**
+ * Mint a refund authorization the way Partner would off-chain: ARC-4 encode the RefundBatch the
+ * contract reconstructs from state and arguments, SHA-256 hash it, and sign the digest with the
+ * refund signer key registered via `setRefundSignerPubkey`.
+ */
+function signRefundBatch(input: {
+  treasury: string
+  asset: bigint
+  expiresAt: bigint
+  nonce: bigint
+  genesisHash: Uint8Array
+  transfers: [string, bigint][]
+  signerSk: Uint8Array
+}): Uint8Array {
+  const encoded = REFUND_BATCH_ABI_TYPE.encode([
+    input.treasury,
+    input.asset,
+    input.expiresAt,
+    input.nonce,
+    input.genesisHash,
+    input.transfers,
+  ])
+  const hash = createHash('sha256').update(encoded).digest()
+  return ed25519SignDetached(hash, input.signerSk)
+}
+
 const fixture = algorandFixture({ testAccountFunding: AlgoAmount.MicroAlgos(0) })
 
 let appClient: MainClient
@@ -44,10 +74,20 @@ describe('Auto-Draw Card', () => {
   // Account authorized via `addWithdrawOperator` to call `cardDebit`. Deliberately not the
   // contract owner, so every debit below proves the gate is the operator box and not ownership.
   let withdrawOperator: algosdk.Account & algosdk.Address
+  // Account authorized via `addRefundOperator` to call `cardRefund` — again not the owner, for
+  // the same reason.
+  let refundOperator: algosdk.Account & algosdk.Address
 
   // MBR the app account locks up per withdraw-operator box:
   // 2500 + 400 * (keyPrefix 'wop' (3) + address (32) + uint64 value (8)) = 19_700
   const WITHDRAW_OPERATOR_BOX_MBR = 19_700n
+  // The refund-operator box has the same shape ('rop' prefix), so the same MBR.
+  const REFUND_OPERATOR_BOX_MBR = 19_700n
+
+  // The refund signer never submits a transaction — only its keypair is used, to mint refund
+  // authorizations off-chain — so it needs no funding.
+  const refundSigner = algosdk.generateAccount()
+  let treasuryAddress: string
 
   let fakeUSDC: bigint
   let newCardAddress: string
@@ -70,8 +110,9 @@ describe('Auto-Draw Card', () => {
     Config.configure({ populateAppCallResources: true })
     const { algorand, generateAccount } = fixture.context
 
-    ;[owner, user, user2, circle, withdrawalAcc, omnibus, withdrawOperator] = await Promise.all([
+    ;[owner, user, user2, circle, withdrawalAcc, omnibus, withdrawOperator, refundOperator] = await Promise.all([
       generateAccount({ initialFunds: AlgoAmount.Algos(100) }),
+      generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
       generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
       generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
       generateAccount({ initialFunds: AlgoAmount.Algos(10) }),
@@ -1737,14 +1778,640 @@ describe('Auto-Draw Card', () => {
     expect(await appClient.state.global.cardsActiveCount()).toEqual(0n)
   })
 
+  // ========== Refund tests ==========
+
+  /**
+   * The treasury is created lazily by the first `treasuryAssetOptIn`, not at deploy: a freshly
+   * rekeyed account must be funded to its minimum balance in the same group as its rekey, and
+   * the app account holds nothing to fund it with at creation time. Until then the recorded
+   * treasury is the zero address with its nonce at 0.
+   */
+  test('Refund: treasury starts as the zero address with nonce 0', async () => {
+    const treasury = await appClient.state.global.treasury()
+    expect(treasury).toBeDefined()
+    expect(treasury!.address).toBe(algosdk.encodeAddress(new Uint8Array(32)))
+
+    const nonce = await appClient.send.getNextTreasuryNonce({ args: [] })
+    expect(nonce.return).toEqual(0n)
+  })
+
+  /**
+   * The refund signer key is what turns an off-chain refund decision into an on-chain payout, so
+   * registering it is as privileged as rotating the withdrawal key: owner-only.
+   */
+  test('Refund: setRefundSignerPubkey is refused for a non-owner', async () => {
+    await expect(
+      appClient.send.setRefundSignerPubkey({
+        args: { pubkey: refundSigner.addr.publicKey },
+        sender: user2.addr,
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+  })
+
+  /**
+   * Registers the ed25519 public key whose signatures authorize refunds. The matching private
+   * key lives off-chain with Partner; `cardRefund` verifies batch signatures against it.
+   */
+  test('Refund: set the refund signer public key', async () => {
+    const result = await appClient.send.setRefundSignerPubkey({
+      args: { pubkey: refundSigner.addr.publicKey },
+    })
+
+    expect(result.confirmation.poolError).toBe('')
+  })
+
+  /**
+   * Same shape as the withdraw-operator registry: authorizing an account to spend the treasury
+   * is owner-only, and a non-owner self-authorizing is rejected before any box is written.
+   */
+  test('Refund: addRefundOperator is refused for a non-owner', async () => {
+    await expect(
+      appClient.send.addRefundOperator({
+        args: { operator: user2.addr.toString() },
+        sender: user2.addr,
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    expect((await appClient.state.box.refundOperators.getMap()).has(user2.addr.toString())).toBe(false)
+  })
+
+  /**
+   * The owner authorizes a dedicated refund-processing account. As with withdraw operators, the
+   * box value is a presence marker and its MBR is locked out of the app account, pinned here so
+   * the release on removal can be checked against it later.
+   */
+  test('Refund: authorize a refund operator', async () => {
+    const { algorand } = fixture.context
+
+    const before = await algorand.account.getInformation(appClient.appAddress)
+
+    const result = await appClient.send.addRefundOperator({
+      args: { operator: refundOperator.addr.toString() },
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    expect((await appClient.state.box.refundOperators.getMap()).get(refundOperator.addr.toString())).toEqual(1n)
+
+    const after = await algorand.account.getInformation(appClient.appAddress)
+    expect(after.minBalance.microAlgos - before.minBalance.microAlgos).toEqual(REFUND_OPERATOR_BOX_MBR)
+  })
+
+  /**
+   * Until the first `treasuryAssetOptIn` creates the treasury, the recorded address is still the
+   * zero address, and a refund would only fail deep in the inner transfer with an opaque error.
+   * The short-circuit turns that into a clear TREASURY_NOT_FOUND. Sent by the authorized
+   * operator so the call gets past the gates in front of the treasury check.
+   */
+  test('Refund: cardRefund before the treasury exists fails with TREASURY_NOT_FOUND', async () => {
+    await expect(
+      appClient.send.cardRefund({
+        args: {
+          transfers: [[user.addr.toString(), 1_000n]],
+          asset: fakeUSDC,
+          expiresAt: BigInt(Math.floor(Date.now() / 1000)) + 3600n,
+          nonce: 0n,
+          signature: new Uint8Array(64),
+        },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('TREASURY_NOT_FOUND')
+  })
+
+  /**
+   * Opting the treasury into an asset stakes contract escrow on it, so it is owner-only like the
+   * rest of the treasury administration.
+   */
+  test('Refund: treasuryAssetOptIn is refused for a non-owner', async () => {
+    await expect(
+      appClient.send.treasuryAssetOptIn({
+        args: { asset: fakeUSDC },
+        sender: user2.addr,
+        staticFee: AlgoAmount.MicroAlgos(3_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+  })
+
+  /**
+   * The first treasury opt-in creates the treasury: a fresh account is generated, rekeyed to
+   * the app, and funded from the contract escrow to cover its base minimum balance plus the
+   * asset slot, all in one call — the cardCreate pattern. The address lands in global state,
+   * comes back as the return value, and the account is left holding exactly its minimum
+   * balance with a zero-balance asset holding.
+   *
+   * The fee covers four inner transactions: the child-app create, its rekey payment, the
+   * escrow top-up, and the opt-in transfer.
+   */
+  test('Refund: the first treasuryAssetOptIn creates and funds the treasury', async () => {
+    const { algorand } = fixture.context
+
+    const result = await appClient.send.treasuryAssetOptIn({
+      args: { asset: fakeUSDC },
+      staticFee: AlgoAmount.MicroAlgos(5_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+    expect(result.return).toBeDefined()
+
+    treasuryAddress = result.return!
+    expect(treasuryAddress).not.toBe(algosdk.encodeAddress(new Uint8Array(32)))
+    expect((await appClient.state.global.treasury())!.address).toBe(treasuryAddress)
+
+    const holding = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
+    expect(holding.balance).toEqual(0n)
+
+    const info = await algorand.account.getInformation(treasuryAddress)
+    expect(info.balance.microAlgos).toEqual(info.minBalance.microAlgos)
+  })
+
+  /**
+   * Re-opting the treasury into an asset it already holds is rejected, mirroring the card
+   * behaviour: the call could only repeat work already done.
+   */
+  test('Refund: treasuryAssetOptIn fails for an already-enabled asset', async () => {
+    await expect(
+      appClient.send.treasuryAssetOptIn({
+        args: { asset: fakeUSDC },
+        staticFee: AlgoAmount.MicroAlgos(3_000),
+      }),
+    ).rejects.toThrow('ASSET_ALREADY_ENABLED')
+  })
+
+  /**
+   * Loads the treasury with refund float. The treasury is a plain asset holder, so funding it is
+   * a standard transfer — here straight from the asset issuer.
+   */
+  test('Refund: fund the treasury with FakeUSDC', async () => {
+    const { algorand } = fixture.context
+
+    await algorand.send.assetTransfer({
+      sender: circle.addr,
+      receiver: treasuryAddress,
+      assetId: fakeUSDC,
+      amount: 50_000_000n,
+    })
+
+    const holding = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
+    expect(holding.balance).toEqual(50_000_000n)
+  })
+
+  /**
+   * The happy path: the refund operator submits a signed three-recipient batch, one entry with
+   * amount 0 to exercise the transfer-skipping path. Every recipient is paid out of the
+   * treasury, the batch consumes the treasury nonce, and one `Refund` event summarizes the
+   * batch — matched on its payload (treasury, asset, count, total, expiresAt, nonce).
+   *
+   * The fee covers the two non-zero inner transfers plus the inner calls `ensureBudget` issues
+   * to buy the opcode budget the signature check needs.
+   */
+  test('Refund: a signed batch pays every recipient from the treasury', async () => {
+    const { algorand } = fixture.context
+    const suggestedParams = await algorand.client.algod.getTransactionParams().do()
+    const genesisHash = suggestedParams.genesisHash!
+
+    const transfers: [string, bigint][] = [
+      [user.addr.toString(), 1_500_000n],
+      [user2.addr.toString(), 2_500_000n],
+      [owner.addr.toString(), 0n],
+    ]
+    const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 3600n
+    const nonce = (await appClient.send.getNextTreasuryNonce({ args: [] })).return!
+
+    const signature = signRefundBatch({
+      treasury: treasuryAddress,
+      asset: fakeUSDC,
+      expiresAt,
+      nonce,
+      genesisHash,
+      transfers,
+      signerSk: refundSigner.sk,
+    })
+
+    const [userBefore, user2Before] = await Promise.all([
+      algorand.asset.getAccountInformation(user.addr, fakeUSDC),
+      algorand.asset.getAccountInformation(user2.addr, fakeUSDC),
+    ])
+
+    const result = await appClient.send.cardRefund({
+      args: { transfers, asset: fakeUSDC, expiresAt, nonce, signature },
+      sender: refundOperator.addr,
+      staticFee: AlgoAmount.MicroAlgos(8_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    // Both non-zero recipients were paid, and the batch total left the treasury.
+    const [userAfter, user2After, treasuryAfter] = await Promise.all([
+      algorand.asset.getAccountInformation(user.addr, fakeUSDC),
+      algorand.asset.getAccountInformation(user2.addr, fakeUSDC),
+      algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC),
+    ])
+    expect(userAfter.balance - userBefore.balance).toEqual(1_500_000n)
+    expect(user2After.balance - user2Before.balance).toEqual(2_500_000n)
+    expect(treasuryAfter.balance).toEqual(46_000_000n)
+
+    // The signature is spent: the treasury nonce advanced.
+    expect((await appClient.send.getNextTreasuryNonce({ args: [] })).return).toEqual(nonce + 1n)
+
+    // The Refund event carries the batch summary.
+    const payload = Buffer.concat([
+      algosdk.decodeAddress(treasuryAddress).publicKey,
+      algosdk.encodeUint64(fakeUSDC),
+      algosdk.encodeUint64(3n),
+      algosdk.encodeUint64(4_000_000n),
+      algosdk.encodeUint64(expiresAt),
+      algosdk.encodeUint64(nonce),
+    ])
+    const emitted = (result.confirmation.logs ?? []).some((log) => Buffer.from(log).subarray(4).equals(payload))
+    expect(emitted).toBe(true)
+  })
+
+  /**
+   * Replay protection: resubmitting the very same batch fails on the consumed nonce, so one
+   * signature can never pay twice.
+   */
+  test('Refund: replaying a spent batch fails with NONCE_INVALID', async () => {
+    const { algorand } = fixture.context
+    const suggestedParams = await algorand.client.algod.getTransactionParams().do()
+    const genesisHash = suggestedParams.genesisHash!
+
+    const transfers: [string, bigint][] = [[user.addr.toString(), 1_500_000n]]
+    const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 3600n
+
+    // Signed for nonce 0, which the batch above already consumed.
+    const signature = signRefundBatch({
+      treasury: treasuryAddress,
+      asset: fakeUSDC,
+      expiresAt,
+      nonce: 0n,
+      genesisHash,
+      transfers,
+      signerSk: refundSigner.sk,
+    })
+
+    await expect(
+      appClient.send.cardRefund({
+        args: { transfers, asset: fakeUSDC, expiresAt, nonce: 0n, signature },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('NONCE_INVALID')
+  })
+
+  /**
+   * The operator gate: an account outside the refund-operator registry is refused before any
+   * other check runs — even the contract owner holds no implicit refund rights.
+   */
+  test('Refund: cardRefund is refused for a non-operator', async () => {
+    await expect(
+      appClient.send.cardRefund({
+        args: {
+          transfers: [[user.addr.toString(), 1n]],
+          asset: fakeUSDC,
+          expiresAt: BigInt(Math.floor(Date.now() / 1000)) + 3600n,
+          nonce: 1n,
+          signature: new Uint8Array(64),
+        },
+        sender: owner.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+  })
+
+  /**
+   * A batch outliving its expiry is dead even with a valid signature and a correct nonce:
+   * expiry bounds how long Partner's off-chain approval stays submittable.
+   */
+  test('Refund: an expired batch fails with REFUND_TIME_INVALID', async () => {
+    const { algorand } = fixture.context
+    const suggestedParams = await algorand.client.algod.getTransactionParams().do()
+    const genesisHash = suggestedParams.genesisHash!
+
+    const transfers: [string, bigint][] = [[user.addr.toString(), 1_000n]]
+    const expiresAt = BigInt(Math.floor(Date.now() / 1000)) - 100n
+    const nonce = (await appClient.send.getNextTreasuryNonce({ args: [] })).return!
+
+    const signature = signRefundBatch({
+      treasury: treasuryAddress,
+      asset: fakeUSDC,
+      expiresAt,
+      nonce,
+      genesisHash,
+      transfers,
+      signerSk: refundSigner.sk,
+    })
+
+    await expect(
+      appClient.send.cardRefund({
+        args: { transfers, asset: fakeUSDC, expiresAt, nonce, signature },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('REFUND_TIME_INVALID')
+  })
+
+  /**
+   * The signature binds every field of the batch: submitting different transfers than were
+   * signed — here a higher amount — fails verification, so an operator cannot redirect or
+   * inflate a refund it was handed.
+   */
+  test('Refund: tampering with a signed batch fails with SIGNATURE_INVALID', async () => {
+    const { algorand } = fixture.context
+    const suggestedParams = await algorand.client.algod.getTransactionParams().do()
+    const genesisHash = suggestedParams.genesisHash!
+
+    const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 3600n
+    const nonce = (await appClient.send.getNextTreasuryNonce({ args: [] })).return!
+
+    const signature = signRefundBatch({
+      treasury: treasuryAddress,
+      asset: fakeUSDC,
+      expiresAt,
+      nonce,
+      genesisHash,
+      transfers: [[user.addr.toString(), 1_000n]],
+      signerSk: refundSigner.sk,
+    })
+
+    await expect(
+      appClient.send.cardRefund({
+        args: {
+          transfers: [[user.addr.toString(), 1_000_000_000n]],
+          asset: fakeUSDC,
+          expiresAt,
+          nonce,
+          signature,
+        },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('SIGNATURE_INVALID')
+  })
+
+  /**
+   * An empty batch is rejected outright — there is nothing it could pay, and rejecting it keeps
+   * a useless signature from consuming a nonce.
+   */
+  test('Refund: an empty batch fails with NO_TRANSFERS', async () => {
+    await expect(
+      appClient.send.cardRefund({
+        args: {
+          transfers: [],
+          asset: fakeUSDC,
+          expiresAt: BigInt(Math.floor(Date.now() / 1000)) + 3600n,
+          nonce: 1n,
+          signature: new Uint8Array(64),
+        },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('NO_TRANSFERS')
+  })
+
+  /**
+   * The batch cap: 17 entries are refused before the signature is even looked at. The cap keeps
+   * a batch inside what one call plus four reference-carrying pad calls can make available, so a
+   * signature is never minted for a batch that could not execute.
+   */
+  test('Refund: a 17-entry batch fails with TOO_MANY_TRANSFERS', async () => {
+    const transfers: [string, bigint][] = Array.from({ length: 17 }, (_, i) => [user.addr.toString(), BigInt(i + 1)])
+
+    await expect(
+      appClient.send.cardRefund({
+        args: {
+          transfers,
+          asset: fakeUSDC,
+          expiresAt: BigInt(Math.floor(Date.now() / 1000)) + 3600n,
+          nonce: 1n,
+          signature: new Uint8Array(64),
+        },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('TOO_MANY_TRANSFERS')
+  })
+
+  /**
+   * The refund pause is owner-gated — it carries no separate pauser role — so the contract's
+   * actual pauser-role holder gains nothing here and a non-owner is refused.
+   */
+  test('Refund: pauseRefund is refused for a non-owner', async () => {
+    await expect(appClient.send.pauseRefund({ args: [], sender: user2.addr })).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    expect(await appClient.state.global.refundPaused()).toEqual(0n)
+  })
+
+  /**
+   * The refund-specific brake: while `refund_paused` is set, a fully valid batch — live
+   * signature, correct nonce, authorized operator — is refused before any other check. The
+   * contract-wide `paused` flag is untouched, preserving the separation from the debit flow.
+   */
+  test('Refund: pausing refunds rejects cardRefund with REFUND_PAUSED', async () => {
+    const paused = await appClient.send.pauseRefund({ args: [] })
+    expect(paused.confirmation.poolError).toBe('')
+    expect(await appClient.state.global.refundPaused()).toEqual(1n)
+    expect(await appClient.state.global.paused()).toEqual(0n)
+
+    await expect(
+      appClient.send.cardRefund({
+        args: {
+          transfers: [[user.addr.toString(), 1_000n]],
+          asset: fakeUSDC,
+          expiresAt: BigInt(Math.floor(Date.now() / 1000)) + 3600n,
+          nonce: 1n,
+          signature: new Uint8Array(64),
+        },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('REFUND_PAUSED')
+  })
+
+  /**
+   * Positive control for the pause, and proof the brake releases: after `unpauseRefund` a
+   * freshly signed single-recipient batch goes through and consumes the next nonce.
+   */
+  test('Refund: unpausing refunds restores cardRefund', async () => {
+    const { algorand } = fixture.context
+
+    const unpaused = await appClient.send.unpauseRefund({ args: [] })
+    expect(unpaused.confirmation.poolError).toBe('')
+    expect(await appClient.state.global.refundPaused()).toEqual(0n)
+
+    const suggestedParams = await algorand.client.algod.getTransactionParams().do()
+    const genesisHash = suggestedParams.genesisHash!
+
+    const transfers: [string, bigint][] = [[user.addr.toString(), 500_000n]]
+    const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 3600n
+    const nonce = (await appClient.send.getNextTreasuryNonce({ args: [] })).return!
+
+    const signature = signRefundBatch({
+      treasury: treasuryAddress,
+      asset: fakeUSDC,
+      expiresAt,
+      nonce,
+      genesisHash,
+      transfers,
+      signerSk: refundSigner.sk,
+    })
+
+    const result = await appClient.send.cardRefund({
+      args: { transfers, asset: fakeUSDC, expiresAt, nonce, signature },
+      sender: refundOperator.addr,
+      staticFee: AlgoAmount.MicroAlgos(6_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    expect((await appClient.send.getNextTreasuryNonce({ args: [] })).return).toEqual(nonce + 1n)
+  })
+
+  /**
+   * A full-size batch: 16 transfers in one call. Sixteen inner transfers exceed what a single
+   * app call may issue (16 inners are allowed, but `ensureBudget` may need some too), and the
+   * group-wide budget pools per app call, so the group carries four cheap pad calls — the same
+   * calls a production batch needs anyway to make 16 distinct recipients plus the treasury
+   * available as account references. Here the recipients cycle through three accounts, so the
+   * pads exist purely for the pooled inner-transaction and opcode budget.
+   */
+  test('Refund: a 16-entry batch executes with pad calls in the group', async () => {
+    const { algorand } = fixture.context
+    const suggestedParams = await algorand.client.algod.getTransactionParams().do()
+    const genesisHash = suggestedParams.genesisHash!
+
+    const recipients = [user.addr.toString(), user2.addr.toString(), owner.addr.toString()]
+    const transfers: [string, bigint][] = Array.from({ length: 16 }, (_, i) => [
+      recipients[i % recipients.length],
+      BigInt((i + 1) * 1_000),
+    ])
+    const total = transfers.reduce((sum, [, amount]) => sum + amount, 0n)
+    const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 3600n
+    const nonce = (await appClient.send.getNextTreasuryNonce({ args: [] })).return!
+
+    const signature = signRefundBatch({
+      treasury: treasuryAddress,
+      asset: fakeUSDC,
+      expiresAt,
+      nonce,
+      genesisHash,
+      transfers,
+      signerSk: refundSigner.sk,
+    })
+
+    const treasuryBefore = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
+
+    const composer = algorand.newGroup()
+    composer.addAppCallMethodCall(
+      await appClient.params.cardRefund({
+        args: { transfers, asset: fakeUSDC, expiresAt, nonce, signature },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(20_000),
+      }),
+    )
+    // Pad calls, distinguished by note so the group holds no duplicate transactions.
+    for (let i = 0; i < 4; i++) {
+      composer.addAppCallMethodCall(
+        await appClient.params.getNextTreasuryNonce({
+          args: [],
+          sender: refundOperator.addr,
+          note: `refund pad ${i}`,
+          staticFee: AlgoAmount.MicroAlgos(1_000),
+        }),
+      )
+    }
+
+    const result = await composer.send()
+    expect(result.confirmations.every((c) => c.poolError === '')).toBe(true)
+
+    const treasuryAfter = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
+    expect(treasuryBefore.balance - treasuryAfter.balance).toEqual(total)
+
+    expect((await appClient.send.getNextTreasuryNonce({ args: [] })).return).toEqual(nonce + 1n)
+  })
+
+  /**
+   * Revocation mirrors the withdraw-operator registry: owner-only, the box MBR returns to the
+   * app account, and the revoked operator's next refund is refused at the gate.
+   */
+  test('Refund: removeRefundOperator revokes refund access and releases the box MBR', async () => {
+    const { algorand } = fixture.context
+
+    await expect(
+      appClient.send.removeRefundOperator({
+        args: { operator: refundOperator.addr.toString() },
+        sender: refundOperator.addr,
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    const before = await algorand.account.getInformation(appClient.appAddress)
+
+    const result = await appClient.send.removeRefundOperator({
+      args: { operator: refundOperator.addr.toString() },
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    expect((await appClient.state.box.refundOperators.getMap()).has(refundOperator.addr.toString())).toBe(false)
+
+    const after = await algorand.account.getInformation(appClient.appAddress)
+    expect(before.minBalance.microAlgos - after.minBalance.microAlgos).toEqual(REFUND_OPERATOR_BOX_MBR)
+
+    await expect(
+      appClient.send.cardRefund({
+        args: {
+          transfers: [[user.addr.toString(), 1_000n]],
+          asset: fakeUSDC,
+          expiresAt: BigInt(Math.floor(Date.now() / 1000)) + 3600n,
+          nonce: 3n,
+          signature: new Uint8Array(64),
+        },
+        sender: refundOperator.addr,
+        staticFee: AlgoAmount.MicroAlgos(8_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+  })
+
+  /**
+   * Winding the treasury down: the close-out sends the remaining refund float to an explicit
+   * recipient — unlike a card close-out, this is live value, not a drained holding — and sweeps
+   * the freed Algo back to the contract escrow, leaving the treasury at exactly its remaining
+   * minimum balance. Owner-only, like the opt-in.
+   */
+  test('Refund: treasuryAssetCloseOut returns the float and frees the MBR', async () => {
+    const { algorand } = fixture.context
+
+    await expect(
+      appClient.send.treasuryAssetCloseOut({
+        args: { asset: fakeUSDC, closeTo: user2.addr.toString() },
+        sender: user2.addr,
+        staticFee: AlgoAmount.MicroAlgos(3_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    const float = (await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)).balance
+    const ownerBefore = await algorand.asset.getAccountInformation(owner.addr, fakeUSDC)
+
+    const result = await appClient.send.treasuryAssetCloseOut({
+      args: { asset: fakeUSDC, closeTo: owner.addr.toString() },
+      staticFee: AlgoAmount.MicroAlgos(3_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    // The float landed on the recipient and the treasury no longer holds the asset.
+    const ownerAfter = await algorand.asset.getAccountInformation(owner.addr, fakeUSDC)
+    expect(ownerAfter.balance - ownerBefore.balance).toEqual(float)
+    await expect(algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)).rejects.toThrow()
+
+    // The freed asset-slot MBR was swept home: the treasury sits at exactly its minimum balance.
+    const info = await algorand.account.getInformation(treasuryAddress)
+    expect(info.balance.microAlgos).toEqual(info.minBalance.microAlgos)
+  })
+
   /**
    * Final lifecycle step: the owner destroys the Main contract and reclaims any remaining
-   * balance, verifying the app can be cleanly deleted once all cards are closed.
+   * balance, verifying the app can be cleanly deleted once all cards are closed. The fee covers
+   * two inner transactions: closing the treasury home and closing the app account to the owner.
    */
   test('Destroy Contract', async () => {
     const result = await appClient.send.delete.destroy({
       args: [],
-      staticFee: AlgoAmount.MicroAlgos(2_000),
+      staticFee: AlgoAmount.MicroAlgos(3_000),
     })
 
     expect(result.confirmation.poolError).toBe('')
