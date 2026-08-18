@@ -129,6 +129,46 @@ type PermissionedWithdrawal = {
   genesisHash: bytes<32>
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- ARC28 event with no fields
+type RefundPause = {}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- ARC28 event with no fields
+type RefundUnpause = {}
+
+type CardRefunded = {
+  card: Account
+  asset: Asset
+  count: uint64
+  total: uint64
+  expiresAt: uint64
+  nonce: uint64
+}
+
+type RefundTransfer = {
+  recipient: Account
+  amount: uint64
+}
+
+type RefundBatch = {
+  treasury: Account
+  asset: Asset
+  expiresAt: uint64
+  nonce: uint64
+  genesisHash: bytes<32>
+  transfers: RefundTransfer[]
+}
+
+type Treasury = {
+  address: Account
+  nonce: uint64
+}
+
+// Maximum recipients per refund batch. Bounded by resource availability, not by the opcode or
+// inner-transaction budgets: an app call makes at most four accounts available and those are
+// shared group-wide, so a 16-recipient batch needs this call plus four reference-carrying pad
+// calls. Asserting the cap turns an obscure "unavailable Holding" failure into a clear one, and
+// stops a signature being minted for a batch that could never execute.
+const MaxRefundTransfers = 16
+
 class ControlledAddress extends Contract {
   /**
    * Create a new account, rekeying it to the caller application address
@@ -178,7 +218,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   public withdrawal_wait_time = GlobalState<uint64>({ key: 'wwt' })
 
   // Permissioned withdrawal public key
-  public withdrawal_pubkey = GlobalState<bytes<32>>({ key: 'pwpk' })
+  public withdrawal_pubkey = GlobalState<bytes<32>>({ key: 'wpk' })
 
   // Withdrawal requests
   // Only one allowed at any given point. MBR is sponsored by the contract owner (app account).
@@ -198,6 +238,21 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   // deployment (the two contracts reference each other, so neither can know the other's app id
   // at create time). While unset, disabling an asset skips delegation cleanup.
   public killswitch_app = GlobalState<Application>({ key: 'ks' })
+
+  // The treasury account refunds are paid out of
+  public treasury = GlobalState<Treasury>({ key: 't' })
+
+  // Authorized refund operators. Presence of the box (value 1) grants the account permission to
+  // call cardRefund. MBR is released on removal.
+  public refund_operators = BoxMap<Account, uint64>({ keyPrefix: 'rop' })
+
+  // Ed25519 public key of the refund signer
+  public refund_pubkey = GlobalState<bytes<32>>({ key: 'rpk' })
+
+  // Stops refunds on their own, without the contract-wide `paused` flag: halting refunds must
+  // not also halt cardDebit, and vice versa. Owner-gated rather than carrying its own pauser
+  // role.
+  public refund_paused = GlobalState<boolean>({ key: 'rpa' })
 
   // ========== Internal Utils ==========
   /**
@@ -410,7 +465,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    * Deploy the contract, setting the owner as provided and initializing global state.
    */
   @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
-  public deploy(owner: Account, omnibus: Account): Account {
+  public deploy(owner: Account, omnibus: Account) {
     this._transferOwnership(owner)
     this.omnibus_address.value = omnibus
     this._pauser.value = Txn.sender
@@ -419,8 +474,31 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     // at creation time.
     this.cards_active_count.value = 0
     this.paused.value = false
+    this.refund_paused.value = false
 
-    return Global.currentApplicationAddress
+    // Create treasury
+    const treasury: Treasury = {
+      address: Global.zeroAddress,
+      nonce: 0,
+    }
+
+    const controlledAddr = compile(ControlledAddress)
+    treasury.address = arc4.abiCall<typeof ControlledAddress.prototype.new>({
+      approvalProgram: controlledAddr.approvalProgram,
+      clearStateProgram: controlledAddr.clearStateProgram,
+      onCompletion: OnCompleteAction.DeleteApplication,
+    }).returnValue
+
+    itxn
+      .payment({
+        receiver: treasury.address,
+        amount: Global.minBalance,
+      })
+      .submit()
+
+    this.treasury.value = clone(treasury)
+
+    return { appAddr: Global.currentApplicationAddress, treasury }
   }
 
   /**
@@ -857,5 +935,174 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     if (this.withdrawals(Txn.sender).exists) {
       this.withdrawals(Txn.sender).delete()
     }
+  }
+
+  // ========== Refund ==========
+  // ===== Owner Methods =====
+  /**
+   * Pause refunds, blocking refund until it is unpaused. Leaves the contract-wide
+   * pause untouched.
+   * Only the owner of the contract can call this method.
+   */
+  public pauseRefund(): void {
+    this.onlyOwner()
+
+    this.refund_paused.value = true
+    emit<RefundPause>({})
+  }
+
+  /**
+   * Unpause refunds, returning them to normal state.
+   * Only the owner of the contract can call this method.
+   */
+  public unpauseRefund(): void {
+    this.onlyOwner()
+
+    this.refund_paused.value = false
+    emit<RefundUnpause>({})
+  }
+
+  /**
+   * Sets the refund signer public key. Rotating it invalidates every unsubmitted
+   * signature, which is the intended emergency response.
+   * Only the owner of the contract can call this method.
+   *
+   * @param pubkey The public key to set.
+   */
+  public setRefundSignerPubkey(pubkey: bytes<32>): void {
+    this.onlyOwner()
+
+    this.refund_pubkey.value = pubkey
+  }
+
+  /**
+   * Authorize an account as a refund operator.
+   * Only the owner of the contract can call this method.
+   *
+   * @param operator The account to authorize.
+   */
+  public addRefundOperator(operator: Account): void {
+    this.onlyOwner()
+
+    this.refund_operators(operator).value = 1
+  }
+
+  /**
+   * Revoke a refund operator. Deleting the box releases its MBR back to the
+   * contract. Only the owner of the contract can call this method.
+   *
+   * @param operator The account to revoke.
+   */
+  public removeRefundOperator(operator: Account): void {
+    this.onlyOwner()
+
+    this.refund_operators(operator).delete()
+  }
+
+  /**
+   * Retrieves the next available nonce for the treasury.
+   *
+   * @returns The nonce for the treasury.
+   */
+  @abimethod({ readonly: true })
+  public getNextTreasuryNonce(): uint64 {
+    return this.treasury.value.nonce
+  }
+
+  // TODO: add opt-in and close-out asset methods for the treasury
+
+  /**
+   * Refunds a card debit that has already settled on chain, by paying the amount out of the
+   * treasury against a signature provided by partner.
+   *
+   * This is a compensating payment, not a rollback: a cardDebit inner transfer is final once
+   * committed, so the funds are moved forward out of the treasury rather than reversed out of
+   * the omnibus.
+   *
+   * The whole batch is one signature and one nonce, so it either pays every recipient or none of
+   * them; a partially applied refund cannot be left behind for an operator to finish.
+   *
+   * Two group requirements cannot be asserted from in here and are the caller's to satisfy:
+   * every (recipient, asset) holding plus the (treasury, asset) holding must be made
+   * available by the group's reference arrays (four accounts per app call, shared group-wide, so
+   * a 16-recipient batch needs this call plus four pad app calls); and the group must over-pay by
+   * one minimum fee per inner transaction, since puya emits a zero fee on inner transactions and
+   * they are paid out of the group's fee credit.
+   *
+   * @param transfers - The recipient/amount pairs to pay, up to MaxRefundTransfers entries.
+   * @param asset - The ID of the asset to refund.
+   * @param expiresAt - The expiry of the refund signature.
+   * @param nonce - The expected treasury nonce.
+   * @param signature - The signature authorising the refund.
+   */
+  public cardRefund(
+    transfers: RefundTransfer[],
+    asset: Asset,
+    expiresAt: uint64,
+    nonce: uint64,
+    signature: bytes<64>,
+  ): void {
+    assert(!this.refund_paused.value, 'REFUND_PAUSED')
+    assert(this.refund_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
+
+    const treasuryAddress = this.treasury.value.address
+
+    const count: uint64 = transfers.length
+    assert(count > 0, 'NO_TRANSFERS')
+    assert(count <= MaxRefundTransfers, 'TOO_MANY_TRANSFERS')
+    assert(Global.latestTimestamp < expiresAt, 'WITHDRAWAL_TIME_INVALID')
+    assert(this.treasury.value.nonce === nonce, 'NONCE_INVALID')
+
+    // Rebuilt from state rather than from caller input, so a signature minted against a
+    // different treasury or network cannot verify here.
+    const refund: RefundBatch = {
+      treasury: treasuryAddress,
+      asset,
+      expiresAt,
+      nonce,
+      genesisHash: Global.genesisHash,
+      transfers: clone(transfers),
+    }
+
+    // Need at least 2500 Opcode budget
+    ensureBudget(2500)
+
+    const refund_hash = op.sha256(arc4.encodeArc4(refund))
+
+    assert(op.ed25519verifyBare(refund_hash, signature, this.refund_pubkey.value), 'SIGNATURE_INVALID')
+
+    // Consume the nonce so the signature is single-use
+    this.treasury.value.nonce = nonce + 1
+
+    // Indexed with the fields read inline, rather than for-of over a bound local: puya rejects
+    // both iterating and assigning a mutable stack type without clone(), and cloning here would
+    // copy the whole batch for no benefit.
+    let total: uint64 = 0
+    for (let i: uint64 = 0; i < count; i = i + 1) {
+      const amount = transfers[i].amount
+
+      // if amount is zero, we skip the asset transfer
+      if (amount > 0) {
+        itxn
+          .assetTransfer({
+            sender: treasuryAddress,
+            assetReceiver: transfers[i].recipient,
+            xferAsset: asset,
+            assetAmount: amount,
+          })
+          .submit()
+      }
+
+      total = total + amount
+    }
+
+    emit<CardRefunded>({
+      card: treasuryAddress,
+      asset: asset,
+      count: count,
+      total: total,
+      expiresAt: expiresAt,
+      nonce: nonce,
+    })
   }
 }
