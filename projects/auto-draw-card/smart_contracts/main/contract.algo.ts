@@ -475,8 +475,8 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   // ========== External Methods ==========
   /**
    * Deploy the contract, setting the owner as provided and initializing global state.
-   * The refund treasury is not created here — see treasuryAssetOptIn — so it starts as the
-   * zero address.
+   * The refund treasury is not created here — see treasuryAssetOptIn — so its global state
+   * starts unset.
    */
   @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
   public deploy(owner: Account, omnibus: Account): Account {
@@ -489,16 +489,6 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     this.cards_active_count.value = 0
     this.paused.value = false
     this.refund_paused.value = false
-
-    // The refund treasury cannot be created at deploy time: a freshly rekeyed account must be
-    // funded to its minimum balance within the same group as the rekey (the ledger refuses a
-    // non-empty account below the minimum), and the app account holds nothing to fund it with
-    // until after creation. The first treasuryAssetOptIn creates it instead, once the escrow
-    // is funded.
-    this.treasury.value = {
-      address: Global.zeroAddress,
-      nonce: 0,
-    }
 
     return Global.currentApplicationAddress
   }
@@ -525,14 +515,12 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
 
     // The treasury is rekeyed to this app, so anything left on it must come home before the app
     // disappears — afterwards its authorizer no longer exists and the balance is stranded
-    // forever. A treasury that was never created is still the zero address and must not be
-    // touched at all (on MainNet the zero address holds a balance, and an inner close from it
-    // would fail and brick destroy).
-    const treasuryAddress = this.treasury.value.address
-    if (treasuryAddress !== Global.zeroAddress) {
+    // forever. Unset treasury state means no treasury was ever created (or it was already
+    // closed via treasuryClose), so there is nothing to sweep.
+    if (this.treasury.hasValue) {
       itxn
         .payment({
-          sender: treasuryAddress,
+          sender: this.treasury.value.address,
           receiver: Global.currentApplicationAddress,
           amount: 0,
           closeRemainderTo: Global.currentApplicationAddress,
@@ -1022,11 +1010,13 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
 
   /**
    * Retrieves the next available nonce for the treasury.
+   * Fails while no treasury exists — see treasuryAssetOptIn.
    *
    * @returns The nonce for the treasury.
    */
   @abimethod({ readonly: true })
   public getNextTreasuryNonce(): uint64 {
+    assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     return this.treasury.value.nonce
   }
 
@@ -1047,14 +1037,19 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     // rekeyed account must be funded to its minimum balance within the same group as the rekey,
     // and at creation the app account holds nothing to fund it with. By the first opt-in the
     // escrow is funded, so the account is created, rekeyed and funded in one breath — the same
-    // pattern as cardCreate.
-    if (this.treasury.value.address === Global.zeroAddress) {
+    // pattern as cardCreate. Writing the global here too (rather than at deploy) means a live
+    // deployment gains the refund feature through a plain contract update, with no state
+    // migration.
+    if (!this.treasury.hasValue) {
       const controlledAddr = compile(ControlledAddress)
-      this.treasury.value.address = arc4.abiCall<typeof ControlledAddress.prototype.new>({
-        approvalProgram: controlledAddr.approvalProgram,
-        clearStateProgram: controlledAddr.clearStateProgram,
-        onCompletion: OnCompleteAction.DeleteApplication,
-      }).returnValue
+      this.treasury.value = {
+        address: arc4.abiCall<typeof ControlledAddress.prototype.new>({
+          approvalProgram: controlledAddr.approvalProgram,
+          clearStateProgram: controlledAddr.clearStateProgram,
+          onCompletion: OnCompleteAction.DeleteApplication,
+        }).returnValue,
+        nonce: 0,
+      }
     }
 
     const treasuryAddress = this.treasury.value.address
@@ -1111,6 +1106,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    */
   public treasuryAssetCloseOut(asset: Asset, closeTo: Account): void {
     this.onlyOwner()
+    assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     const treasuryAddress = this.treasury.value.address
 
     itxn
@@ -1137,6 +1133,34 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
       treasury: treasuryAddress,
       asset: asset,
     })
+  }
+
+  /**
+   * Close the treasury account, permanently removing it from the ledger and returning its
+   * balance to the contract escrow — the treasury counterpart of cardClose. The treasury must
+   * already be closed out of every asset (Algorand forbids closing an account that still holds
+   * an ASA — see treasuryAssetCloseOut).
+   *
+   * Deleting the treasury state returns the contract to its pre-treasury shape, so a later
+   * treasuryAssetOptIn starts over with a brand-new account at nonce 0. That reset is safe:
+   * signatures are verified against a batch rebuilt around the treasury address, so anything
+   * minted for the old treasury cannot verify against its replacement.
+   * Only the owner of the contract can call this method.
+   */
+  public treasuryClose(): void {
+    this.onlyOwner()
+    assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
+
+    itxn
+      .payment({
+        sender: this.treasury.value.address,
+        receiver: Global.currentApplicationAddress,
+        amount: 0,
+        closeRemainderTo: Global.currentApplicationAddress,
+      })
+      .submit()
+
+    this.treasury.delete()
   }
 
   /**
@@ -1172,12 +1196,8 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   ): void {
     assert(!this.refund_paused.value, 'REFUND_PAUSED')
     assert(this.refund_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
-
-    // The treasury exists only once the first treasuryAssetOptIn has created it; until then a
-    // refund could only fail deep in the inner transfer with an opaque error, so short-circuit
-    // with a clear one.
+    assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     const treasuryAddress = this.treasury.value.address
-    assert(treasuryAddress !== Global.zeroAddress, 'TREASURY_NOT_FOUND')
 
     const count: uint64 = transfers.length
     assert(count > 0, 'NO_TRANSFERS')

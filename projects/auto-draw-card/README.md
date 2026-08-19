@@ -8,7 +8,7 @@ This project is built around a **Main** contract that "generates" a new address 
 
 All minimum balance requirements (MBR) — box storage, account minimum balances and asset opt-in MBR — are **pre-funded by the contract owner**. Callers never attach MBR payments: `cardAssetOptIn` tops a card up from the contract escrow if it cannot cover the opt-in itself. MBR flows back the same way. When a card is closed, the freed MBR returns to the contract and the owner can reclaim it with `recoverAsset`. When a card opts out of an asset (`cardDisableAsset`), the freed opt-in MBR — along with any other surplus Algo on the card — is swept back to the contract too.
 
-The contract also controls a **refund treasury** — another rekeyed account, used to pay out signed refund batches (see [Refunds](#refunds)). It follows the same MBR pattern: created and funded from the contract escrow on its first asset opt-in (`treasuryAssetOptIn`), swept back to the contract on close-out (`treasuryAssetCloseOut`) and when the contract is destroyed.
+The contract also controls a **refund treasury** — another rekeyed account, used to pay out signed refund batches (see [Refunds](#refunds)). It follows the same MBR pattern: created and funded from the contract escrow on its first asset opt-in (`treasuryAssetOptIn`), swept back to the contract on asset close-out (`treasuryAssetCloseOut`), when the treasury account itself is closed (`treasuryClose`), and when the contract is destroyed.
 
 Two auxiliary contracts support an automated draw ("AutoDraw") flow on top of the Main contract:
 
@@ -44,7 +44,7 @@ The card-management application. Its methods are grouped below.
 
 #### deploy(address,address)address
 
-Deploy the contract, setting the first address as the owner and the second as the omnibus address. The transaction sender becomes the initial pauser. Returns the contract application address. The refund treasury starts as the zero address — it is created by the first `treasuryAssetOptIn`, since the app account holds nothing to fund it with at creation time.
+Deploy the contract, setting the first address as the owner and the second as the omnibus address. The transaction sender becomes the initial pauser. Returns the contract application address. The refund treasury is not touched here — its global state stays unset until the first `treasuryAssetOptIn` creates it, both because the app account holds nothing to fund it with at creation time and so that a live deployment gains the refund feature through a plain contract update with no state migration.
 
 #### update()void
 
@@ -162,11 +162,15 @@ Refunds carry their own pause switch (`refund_paused`), separate from the contra
 
 #### treasuryAssetOptIn(uint64)address
 
-Owner-only. Opts the treasury into an asset so refunds of that asset can be paid from it, and returns the treasury address (also readable via the `treasury` global state). The first call creates the treasury: a freshly rekeyed account must be funded to its minimum balance in the same group as its rekey, and the app account is unfunded at creation time, so the first opt-in creates, rekeys and funds it from the contract escrow in one call — four inner transactions; later opt-ins need at most two. Any minimum-balance shortfall is always covered from the escrow, and a redundant opt-in fails with `ASSET_ALREADY_ENABLED`.
+Owner-only. Opts the treasury into an asset so refunds of that asset can be paid from it, and returns the treasury address (also readable via the `treasury` global state). The first call creates the treasury: a freshly rekeyed account must be funded to its minimum balance in the same group as its rekey, and the app account is unfunded at creation time, so the first opt-in creates, rekeys and funds it from the contract escrow in one call — four inner transactions; later opt-ins need at most two. The `treasury` global state is also written here rather than at deploy, so an updated live deployment needs no state migration. Any minimum-balance shortfall is always covered from the escrow, and a redundant opt-in fails with `ASSET_ALREADY_ENABLED`.
 
 #### treasuryAssetCloseOut(uint64,address)void
 
 Owner-only. Closes the treasury out of an asset, sending any remaining balance — live refund float, unlike a card's drained holding — to the given `closeTo` account, which must already hold the asset. The freed opt-in MBR plus any surplus Algo is swept back to the contract, leaving the treasury at exactly its remaining minimum balance. Args: `asset, closeTo`.
+
+#### treasuryClose()void
+
+Owner-only. Closes the treasury account itself — the treasury counterpart of `cardClose` — returning its balance to the contract and deleting the `treasury` global state, so readers are back to `TREASURY_NOT_FOUND` as before the first opt-in. The treasury must already be closed out of every asset. A later `treasuryAssetOptIn` starts over with a brand-new account at nonce 0; that reset is safe because signatures bind the treasury address, so nothing minted for the old treasury can verify against its replacement.
 
 #### cardRefund((address,uint64)[],uint64,uint64,uint64,byte[64])void
 
@@ -190,7 +194,7 @@ Owner-only. Grant or revoke an account's permission to submit `cardRefund` batch
 
 #### getNextTreasuryNonce()uint64
 
-Read the next treasury nonce, needed to sign a refund batch.
+Read the next treasury nonce, needed to sign a refund batch. Fails with `TREASURY_NOT_FOUND` while no treasury exists — as do `cardRefund`, `treasuryAssetCloseOut` and `treasuryClose`.
 
 ## Killswitch contract
 
@@ -280,6 +284,7 @@ classDiagram
         removeRefundOperator()
         treasuryAssetOptIn()
         treasuryAssetCloseOut()
+        treasuryClose()
     }
 
     class Partner {

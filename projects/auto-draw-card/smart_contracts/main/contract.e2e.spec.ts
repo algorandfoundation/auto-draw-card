@@ -1783,16 +1783,15 @@ describe('Auto-Draw Card', () => {
   /**
    * The treasury is created lazily by the first `treasuryAssetOptIn`, not at deploy: a freshly
    * rekeyed account must be funded to its minimum balance in the same group as its rekey, and
-   * the app account holds nothing to fund it with at creation time. Until then the recorded
-   * treasury is the zero address with its nonce at 0.
+   * the app account holds nothing to fund it with at creation time. Until then the treasury
+   * global is entirely unset — deploy writes no placeholder, so a live deployment can gain the
+   * refund feature through a plain contract update with no state migration — and readers
+   * surface that as TREASURY_NOT_FOUND.
    */
-  test('Refund: treasury starts as the zero address with nonce 0', async () => {
-    const treasury = await appClient.state.global.treasury()
-    expect(treasury).toBeDefined()
-    expect(treasury!.address).toBe(algosdk.encodeAddress(new Uint8Array(32)))
+  test('Refund: no treasury exists until the first opt-in creates one', async () => {
+    expect(await appClient.state.global.treasury()).toBeUndefined()
 
-    const nonce = await appClient.send.getNextTreasuryNonce({ args: [] })
-    expect(nonce.return).toEqual(0n)
+    await expect(appClient.send.getNextTreasuryNonce({ args: [] })).rejects.toThrow('TREASURY_NOT_FOUND')
   })
 
   /**
@@ -1915,6 +1914,7 @@ describe('Auto-Draw Card', () => {
     treasuryAddress = result.return!
     expect(treasuryAddress).not.toBe(algosdk.encodeAddress(new Uint8Array(32)))
     expect((await appClient.state.global.treasury())!.address).toBe(treasuryAddress)
+    expect((await appClient.send.getNextTreasuryNonce({ args: [] })).return).toEqual(0n)
 
     const holding = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
     expect(holding.balance).toEqual(0n)
@@ -2079,14 +2079,23 @@ describe('Auto-Draw Card', () => {
   /**
    * A batch outliving its expiry is dead even with a valid signature and a correct nonce:
    * expiry bounds how long Partner's off-chain approval stays submittable.
+   *
+   * The expiry is derived from the last block's timestamp rather than from wall clock: LocalNet
+   * dev-mode block time lags real time, so a wall-clock "past" can still be the chain's future
+   * and the batch would wrongly execute. Block timestamps never decrease, so an expiry at or
+   * before the last block is guaranteed expired in the next one.
    */
   test('Refund: an expired batch fails with REFUND_TIME_INVALID', async () => {
     const { algorand } = fixture.context
     const suggestedParams = await algorand.client.algod.getTransactionParams().do()
     const genesisHash = suggestedParams.genesisHash!
 
+    const status = await algorand.client.algod.status().do()
+    const lastBlock = await algorand.client.algod.block(status.lastRound).do()
+    const chainNow = BigInt(lastBlock.block.header.timestamp)
+
     const transfers: [string, bigint][] = [[user.addr.toString(), 1_000n]]
-    const expiresAt = BigInt(Math.floor(Date.now() / 1000)) - 100n
+    const expiresAt = chainNow - 100n
     const nonce = (await appClient.send.getNextTreasuryNonce({ args: [] })).return!
 
     const signature = signRefundBatch({
@@ -2368,6 +2377,22 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
+   * A treasury still holding an ASA cannot be closed — Algorand forbids closing such an account,
+   * exactly as with cards — so the account close is refused at the protocol level and both the
+   * account and its state survive. The asset must go through treasuryAssetCloseOut first.
+   */
+  test('Refund: treasuryClose is blocked while the treasury still holds an asset', async () => {
+    await expect(
+      appClient.send.treasuryClose({
+        args: [],
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow()
+
+    expect((await appClient.state.global.treasury())!.address).toBe(treasuryAddress)
+  })
+
+  /**
    * Winding the treasury down: the close-out sends the remaining refund float to an explicit
    * recipient — unlike a card close-out, this is live value, not a drained holding — and sweeps
    * the freed Algo back to the contract escrow, leaving the treasury at exactly its remaining
@@ -2404,9 +2429,73 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
+   * The treasury counterpart of cardClose: with every asset closed out, the owner closes the
+   * treasury account itself. Its remaining balance returns to the contract escrow, the account
+   * leaves the ledger, and the treasury state is deleted — readers are back to
+   * TREASURY_NOT_FOUND, exactly as before the first opt-in. Owner-only, like the rest of the
+   * treasury administration.
+   */
+  test('Refund: treasuryClose removes the treasury and returns its balance', async () => {
+    const { algorand } = fixture.context
+
+    await expect(
+      appClient.send.treasuryClose({
+        args: [],
+        sender: user2.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    const appBefore = (await algorand.account.getInformation(appClient.appAddress)).balance.microAlgos
+    const treasuryBalance = (await algorand.account.getInformation(treasuryAddress)).balance.microAlgos
+
+    const result = await appClient.send.treasuryClose({
+      args: [],
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    // The balance came home and the account is gone from the ledger.
+    const appAfter = (await algorand.account.getInformation(appClient.appAddress)).balance.microAlgos
+    expect(appAfter - appBefore).toEqual(treasuryBalance)
+    expect((await algorand.account.getInformation(treasuryAddress)).balance.microAlgos).toEqual(0n)
+
+    // The treasury state is deleted, not zeroed.
+    expect(await appClient.state.global.treasury()).toBeUndefined()
+    await expect(appClient.send.getNextTreasuryNonce({ args: [] })).rejects.toThrow('TREASURY_NOT_FOUND')
+  })
+
+  /**
+   * Closing is not the end of refunds: the next opt-in starts over with a brand-new treasury at
+   * nonce 0. The fresh address is what makes the nonce reset safe — signatures bind the treasury
+   * address, so nothing minted for the old account can verify against this one. The asset is
+   * closed out again afterwards, leaving a live but asset-free treasury for `destroy` to sweep.
+   */
+  test('Refund: a new treasury can be created after closing', async () => {
+    const oldTreasury = treasuryAddress
+
+    const result = await appClient.send.treasuryAssetOptIn({
+      args: { asset: fakeUSDC },
+      staticFee: AlgoAmount.MicroAlgos(5_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    treasuryAddress = result.return!
+    expect(treasuryAddress).not.toBe(oldTreasury)
+    expect((await appClient.send.getNextTreasuryNonce({ args: [] })).return).toEqual(0n)
+
+    const closedOut = await appClient.send.treasuryAssetCloseOut({
+      args: { asset: fakeUSDC, closeTo: owner.addr.toString() },
+      staticFee: AlgoAmount.MicroAlgos(3_000),
+    })
+    expect(closedOut.confirmation.poolError).toBe('')
+  })
+
+  /**
    * Final lifecycle step: the owner destroys the Main contract and reclaims any remaining
    * balance, verifying the app can be cleanly deleted once all cards are closed. The fee covers
-   * two inner transactions: closing the treasury home and closing the app account to the owner.
+   * two inner transactions: closing the (still-live) treasury home and closing the app account
+   * to the owner.
    */
   test('Destroy Contract', async () => {
     const result = await appClient.send.delete.destroy({
