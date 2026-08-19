@@ -172,11 +172,11 @@ Owner-only. Closes the treasury account itself — the treasury counterpart of `
 
 #### cardRefund((address,uint64)[],uint64,uint64,uint64,byte[64])void
 
-Refund-operator only, when not paused. Pays a signed batch of up to 16 `(recipient, amount)` transfers of one asset out of the treasury. Args: `transfers, asset, expiresAt, nonce, signature`.
+Refund-operator only, when not paused. Pays a signed batch of up to 48 `(recipient, amount)` transfers of one asset out of the treasury — the most the protocol's 2048-byte app-argument limit admits in one call. Args: `transfers, asset, expiresAt, nonce, signature`.
 
 The contract rebuilds the signed payload from its own state — treasury address, genesis hash — plus the call arguments, SHA-256 hashes its ARC-4 encoding, and verifies the ed25519 signature against the refund signer key, so a signature minted for a different treasury, network, batch or nonce cannot verify here. The treasury nonce makes each signature single-use, and the batch is atomic: every recipient is paid or none is. Zero amounts are counted but not transferred. Emits one `Refund` event summarizing the batch (`treasury, asset, count, total, expiresAt, nonce`).
 
-Two group-level requirements are the caller's to satisfy: every recipient holding plus the treasury holding must be made available through the group's account references (four accounts per app call, shared group-wide, so a full 16-recipient batch needs four extra pad app calls — which also raise the group's pooled inner-transaction and opcode budgets), and the group must carry one minimum fee per inner transaction: the transfers themselves plus whatever `ensureBudget` issues to buy opcode budget for the signature check.
+Two group-level requirements are the caller's to satisfy: every resource the batch touches must be made available through the group's access lists (requires consensus v41), and the group must carry one minimum fee per inner transaction: the transfers themselves plus whatever `ensureBudget` issues to buy opcode budget for the signature check. Access lists hold 16 entries per app call, shared group-wide, but holdings get no cross-product availability and a holding entry is encoded against address and asset entries in the same call's list. Each recipient therefore costs an address plus a holding entry, and the batch also needs the asset, the operator's box and the treasury's address and holding — so six recipients fit the `cardRefund` call itself, each pad app call fits the asset entry plus seven more, and a full 48-recipient batch needs six pads, which also raise the group's pooled inner-transaction and opcode budgets.
 
 #### setRefundSignerPubkey(byte[32])void
 

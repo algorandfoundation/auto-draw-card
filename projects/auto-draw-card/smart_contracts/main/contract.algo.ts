@@ -169,12 +169,13 @@ type Treasury = {
   nonce: uint64
 }
 
-// Maximum recipients per refund batch. Bounded by resource availability, not by the opcode or
-// inner-transaction budgets: an app call makes at most four accounts available and those are
-// shared group-wide, so a 16-recipient batch needs this call plus four reference-carrying pad
-// calls. Asserting the cap turns an obscure "unavailable Holding" failure into a clear one, and
-// stops a signature being minted for a batch that could never execute.
-const MaxRefundTransfers = 16
+// Maximum recipients per refund batch. Bounded by the 2048-byte total app-argument limit, not
+// by references or budgets: the call's arguments cost 94 + 40*N bytes, so 48 is the largest
+// batch the protocol accepts in one call. Resource availability is the caller's to provide via
+// access lists (2*N + 4 entries group-wide, 16 per app call — see cardRefund). Asserting the
+// cap turns an obscure protocol rejection into a clear one, and stops a signature being minted
+// for a batch that could never execute.
+const MaxRefundTransfers = 48
 
 class ControlledAddress extends Contract {
   /**
@@ -1141,10 +1142,14 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
    * them; a partially applied refund cannot be left behind for an operator to finish.
    *
    * Two group requirements cannot be asserted from in here and are the caller's to satisfy:
-   * every (recipient, asset) holding plus the (treasury, asset) holding must be made
-   * available by the group's reference arrays (four accounts per app call, shared group-wide, so
-   * a 16-recipient batch needs this call plus four pad app calls); and the group must over-pay by
-   * one minimum fee per inner transaction, since puya emits a zero fee on inner transactions and
+   * every (recipient, asset) holding plus the (treasury, asset) holding must be made available
+   * through the group's access lists (16 entries per app call, shared group-wide). Each
+   * recipient costs an address entry plus a holding entry, the batch as a whole needs the
+   * asset, the sender's refund-operator box and the treasury's address and holding, and a
+   * holding entry is encoded against address and asset entries in the same call's list — so
+   * this call fits six recipients, each pad app call fits the asset plus seven more, and a
+   * full 48-recipient batch needs this call plus six pads. And the group must over-pay by one
+   * minimum fee per inner transaction, since puya emits a zero fee on inner transactions and
    * they are paid out of the group's fee credit.
    *
    * @param transfers - The recipient/amount pairs to pay, up to MaxRefundTransfers entries.
@@ -1182,8 +1187,9 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
       transfers: clone(transfers),
     }
 
-    // Need at least 2500 Opcode budget
-    ensureBudget(2500)
+    // Signature verification is a flat 1900, but encoding and hashing the batch and issuing the
+    // inner transfers scale with its size.
+    ensureBudget(2500 + 70 * count)
 
     const refund_hash = op.sha256(arc4.encodeArc4(refund))
 

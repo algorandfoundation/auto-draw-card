@@ -1,5 +1,6 @@
 import { Config } from '@algorandfoundation/algokit-utils'
 import { algorandFixture } from '@algorandfoundation/algokit-utils/testing'
+import type { ResourceReference } from '@algorandfoundation/algokit-utils/types/app-manager'
 import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount'
 import algosdk from 'algosdk'
 import { createHash, createPrivateKey, sign as cryptoSign } from 'node:crypto'
@@ -88,6 +89,9 @@ describe('Auto-Draw Card', () => {
   // authorizations off-chain — so it needs no funding.
   const refundSigner = algosdk.generateAccount()
   let treasuryAddress: string
+  // Distinct opted-in recipients created by the full-size batch test and reused by the
+  // solo-call test below it.
+  let refundRecipients: (algosdk.Account & algosdk.Address)[]
 
   let fakeUSDC: bigint
   let newCardAddress: string
@@ -1781,6 +1785,37 @@ describe('Auto-Draw Card', () => {
   // ========== Refund tests ==========
 
   /**
+   * Builds the access lists a refund batch needs, one list per app call, 16 entries each —
+   * the per-transaction MaxAppAccess limit. Availability is shared group-wide, but unlike the
+   * legacy reference arrays holdings get no cross-product availability, and a holding entry
+   * is *encoded* against address and asset entries in the same transaction's list, so every
+   * recipient costs an address plus a holding entry and every list carrying holdings must
+   * also carry the asset entry. The cardRefund call therefore fits the asset, the operator's
+   * 'rop' box and the treasury's address and holding plus six recipients; each pad call fits
+   * the asset plus seven more.
+   */
+  function refundAccessListChunks(recipients: algosdk.Address[]): ResourceReference[][] {
+    const treasury = algosdk.Address.fromString(treasuryAddress)
+    const pair = (address: algosdk.Address): ResourceReference[] => [
+      { address },
+      { holding: { address, assetId: fakeUSDC } },
+    ]
+    const chunks: ResourceReference[][] = [
+      [
+        { assetId: fakeUSDC },
+        { box: { appId: 0n, name: new Uint8Array([...Buffer.from('rop'), ...refundOperator.addr.publicKey]) } },
+        { address: treasury },
+        { holding: { address: treasury, assetId: fakeUSDC } },
+        ...recipients.slice(0, 6).flatMap(pair),
+      ],
+    ]
+    for (let i = 6; i < recipients.length; i += 7) {
+      chunks.push([{ assetId: fakeUSDC }, ...recipients.slice(i, i + 7).flatMap(pair)])
+    }
+    return chunks
+  }
+
+  /**
    * The treasury is created lazily by the first `treasuryAssetOptIn`, not at deploy: a freshly
    * rekeyed account must be funded to its minimum balance in the same group as its rekey, and
    * the app account holds nothing to fund it with at creation time. Until then the treasury
@@ -2176,12 +2211,14 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * The batch cap: 17 entries are refused before the signature is even looked at. The cap keeps
-   * a batch inside what one call plus four reference-carrying pad calls can make available, so a
-   * signature is never minted for a batch that could not execute.
+   * The batch cap sits exactly at the protocol's own ceiling: the call's arguments cost
+   * 94 + 40 per entry, so 48 entries fit the 2048-byte total-argument limit and 49 do not.
+   * The node therefore refuses a 49-entry call before the program — and its
+   * TOO_MANY_TRANSFERS assert — can even run; the on-chain assert is defence in depth for a
+   * protocol that ever accepts larger arguments.
    */
-  test('Refund: a 17-entry batch fails with TOO_MANY_TRANSFERS', async () => {
-    const transfers: [string, bigint][] = Array.from({ length: 17 }, (_, i) => [user.addr.toString(), BigInt(i + 1)])
+  test('Refund: a 49-entry batch exceeds the protocol argument limit', async () => {
+    const transfers: [string, bigint][] = Array.from({ length: 49 }, (_, i) => [user.addr.toString(), BigInt(i + 1)])
 
     await expect(
       appClient.send.cardRefund({
@@ -2195,7 +2232,7 @@ describe('Auto-Draw Card', () => {
         sender: refundOperator.addr,
         staticFee: AlgoAmount.MicroAlgos(8_000),
       }),
-    ).rejects.toThrow('TOO_MANY_TRANSFERS')
+    ).rejects.toThrow(/too long/)
   })
 
   /**
@@ -2261,21 +2298,38 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * A full-size batch: 16 transfers in one call. Sixteen inner transfers exceed what a single
-   * app call may issue (16 inners are allowed, but `ensureBudget` may need some too), and the
-   * group-wide budget pools per app call, so the group carries four cheap pad calls — the same
-   * calls a production batch needs anyway to make 16 distinct recipients plus the treasury
-   * available as account references. Here the recipients cycle through three accounts, so the
-   * pads exist purely for the pooled inner-transaction and opcode budget.
+   * A full-size batch: 48 transfers in one call, the most the 2048-byte argument limit admits.
+   * Every resource is supplied through explicit access lists rather than the auto-populated
+   * legacy reference arrays: six recipients fit the cardRefund call alongside the batch's
+   * fixed entries, and each of six pad calls carries seven more (see
+   * `refundAccessListChunks`). The pads also raise the group's pooled inner-transaction and
+   * opcode budgets, which 48 inner transfers plus `ensureBudget`'s top-ups need anyway.
+   *
+   * The recipients are 48 distinct opted-in accounts — reference packing is the point of this
+   * test, so they cannot cycle through a few accounts the way the smaller batches do.
    */
-  test('Refund: a 16-entry batch executes with pad calls in the group', async () => {
-    const { algorand } = fixture.context
+  test('Refund: a 48-entry batch executes with access-list pad calls in the group', async () => {
+    const { algorand, generateAccount } = fixture.context
     const suggestedParams = await algorand.client.algod.getTransactionParams().do()
     const genesisHash = suggestedParams.genesisHash!
 
-    const recipients = [user.addr.toString(), user2.addr.toString(), owner.addr.toString()]
-    const transfers: [string, bigint][] = Array.from({ length: 16 }, (_, i) => [
-      recipients[i % recipients.length],
+    // Enough for the base minimum balance, the asset holding's slot, and the opt-in fee.
+    refundRecipients = await Promise.all(
+      Array.from({ length: 48 }, () => generateAccount({ initialFunds: AlgoAmount.MicroAlgos(300_000) })),
+    )
+    await Promise.all(
+      refundRecipients.map((recipient) =>
+        algorand.send.assetTransfer({
+          sender: recipient.addr,
+          receiver: recipient.addr,
+          assetId: fakeUSDC,
+          amount: 0n,
+        }),
+      ),
+    )
+
+    const transfers: [string, bigint][] = refundRecipients.map((recipient, i) => [
+      recipient.addr.toString(),
       BigInt((i + 1) * 1_000),
     ])
     const total = transfers.reduce((sum, [, amount]) => sum + amount, 0n)
@@ -2294,20 +2348,27 @@ describe('Auto-Draw Card', () => {
 
     const treasuryBefore = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
 
+    // The cardRefund call takes the first list, six pads carry the rest.
+    const accessChunks = refundAccessListChunks(refundRecipients.map((recipient) => recipient.addr))
+    expect(accessChunks.length).toBe(7)
+
     const composer = algorand.newGroup()
     composer.addAppCallMethodCall(
       await appClient.params.cardRefund({
         args: { transfers, asset: fakeUSDC, expiresAt, nonce, signature },
         sender: refundOperator.addr,
-        staticFee: AlgoAmount.MicroAlgos(20_000),
+        accessReferences: accessChunks[0],
+        // 48 inner transfers plus the opcode top-ups ensureBudget buys.
+        staticFee: AlgoAmount.MicroAlgos(56_000),
       }),
     )
     // Pad calls, distinguished by note so the group holds no duplicate transactions.
-    for (let i = 0; i < 4; i++) {
+    for (let i = 1; i < accessChunks.length; i++) {
       composer.addAppCallMethodCall(
         await appClient.params.getNextTreasuryNonce({
           args: [],
           sender: refundOperator.addr,
+          accessReferences: accessChunks[i],
           note: `refund pad ${i}`,
           staticFee: AlgoAmount.MicroAlgos(1_000),
         }),
@@ -2316,6 +2377,61 @@ describe('Auto-Draw Card', () => {
 
     const result = await composer.send()
     expect(result.confirmations.every((c) => c.poolError === '')).toBe(true)
+
+    const treasuryAfter = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
+    expect(treasuryBefore.balance - treasuryAfter.balance).toEqual(total)
+
+    // Every one of the 48 recipients was paid its own amount.
+    const balances = await Promise.all(
+      refundRecipients.map((recipient) => algorand.asset.getAccountInformation(recipient.addr, fakeUSDC)),
+    )
+    balances.forEach((holding, i) => expect(holding.balance).toEqual(BigInt((i + 1) * 1_000)))
+
+    expect((await appClient.send.getNextTreasuryNonce({ args: [] })).return).toEqual(nonce + 1n)
+  })
+
+  /**
+   * The solo ceiling: six recipients fit a single call's 16 access entries — the four fixed
+   * entries plus an address and holding per recipient — so no pad calls are needed at all.
+   * Under the legacy four-account reference arrays the same call topped out at three.
+   */
+  test('Refund: a six-recipient batch needs no pad calls', async () => {
+    const { algorand } = fixture.context
+    const suggestedParams = await algorand.client.algod.getTransactionParams().do()
+    const genesisHash = suggestedParams.genesisHash!
+
+    const recipients = refundRecipients.slice(0, 6)
+    const transfers: [string, bigint][] = recipients.map((recipient, i) => [
+      recipient.addr.toString(),
+      BigInt((i + 1) * 500),
+    ])
+    const total = transfers.reduce((sum, [, amount]) => sum + amount, 0n)
+    const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 3600n
+    const nonce = (await appClient.send.getNextTreasuryNonce({ args: [] })).return!
+
+    const signature = signRefundBatch({
+      treasury: treasuryAddress,
+      asset: fakeUSDC,
+      expiresAt,
+      nonce,
+      genesisHash,
+      transfers,
+      signerSk: refundSigner.sk,
+    })
+
+    const treasuryBefore = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
+
+    const accessChunks = refundAccessListChunks(recipients.map((recipient) => recipient.addr))
+    expect(accessChunks.length).toBe(1)
+    expect(accessChunks[0].length).toBe(16)
+
+    const result = await appClient.send.cardRefund({
+      args: { transfers, asset: fakeUSDC, expiresAt, nonce, signature },
+      sender: refundOperator.addr,
+      accessReferences: accessChunks[0],
+      staticFee: AlgoAmount.MicroAlgos(12_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
 
     const treasuryAfter = await algorand.asset.getAccountInformation(treasuryAddress, fakeUSDC)
     expect(treasuryBefore.balance - treasuryAfter.balance).toEqual(total)
