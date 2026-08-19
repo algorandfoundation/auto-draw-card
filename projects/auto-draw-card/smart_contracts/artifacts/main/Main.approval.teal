@@ -4,28 +4,28 @@
 // @algorandfoundation/algorand-typescript/arc4/index.d.ts::Contract.approvalProgram() -> uint64:
 main:
     intcblock 0 1 32 8
-    bytecblock "cf" "t" 0x151f7c75 "wr" "cfac" "_owner" "_pauser" "paused" "rpa" "oa" "wop" "ks" "rop" 0x068101 "wwt" "pwpk" base64(C4EBQw==) base64(CyACAAGABFYdL+o2GgCOAQABADEZgQUSMRgUEERCAACxMgoyDrIgIrIIsgcjshAisgGzgAQVH3x1MgpQsCND) 0x561d2fea "pa" 0x3fd78295 "permissionless" "approved" "rpk"
-    // smart_contracts/main/contract.algo.ts:222
+    bytecblock "cf" "t" 0x151f7c75 "wr" "cfac" "_owner" "_pauser" "paused" "oa" "wop" "ks" "rop" 0x068101 "wwt" "pwpk" base64(C4EBQw==) base64(CyACAAGABFYdL+o2GgCOAQABADEZgQUSMRgUEERCAACxMgoyDrIgIrIIsgcjshAisgGzgAQVH3x1MgpQsCND) 0x561d2fea "pa" 0x3fd78295 "permissionless" "approved" "rpk"
+    // smart_contracts/main/contract.algo.ts:217
     // export class Main extends classes(Ownable, Pausable, Recoverable) {
     pushbytess 0xa0e81872 0x9c86a185 // method "update()void", method "destroy()void"
     txna ApplicationArgs 0
     match main_update_route@4 main_destroy_route@5
 
 main_switch_case_next@6:
-    // smart_contracts/main/contract.algo.ts:222
+    // smart_contracts/main/contract.algo.ts:217
     // export class Main extends classes(Ownable, Pausable, Recoverable) {
     txn OnCompletion
     !
     assert
     txn ApplicationID
-    bz main_create_NoOp@45
-    pushbytess 0xa1aada43 0xa050f5f1 0xbfdf95dc 0x5b277143 0x47bb9dfd 0x3fa1238b 0xad162624 0xcbee2ba1 0x745dbf16 0xda1b2789 0xac731de6 0xae796b45 0x87d99464 0x2c39c785 0x9537d509 0xb7349158 0xbbd0def0 0x13ff1ce9 0xf2e3f37f 0x0bbbf37f 0xbde8d399 0x9220cc84 0xa431fbe9 0x67d6b838 0x22d37217 0x9e570264 0xa9acbdec 0xe9462481 0x325fca91 0xb1bbb0a8 0xe17bafb4 0xb0d953b3 0x0178f94b 0x1b529de8 0x0cadd163 0x785a1bf9 // method "cardAssetOptIn(address,uint64)void", method "setWithdrawalTimeout(uint64)void", method "setWithdrawalPubkey(byte[32])void", method "cardCreate(address,uint64)address", method "cardClose(address)void", method "cardRecover(address,address)void", method "cardDebit(address,address,uint64,uint64,uint64,string)void", method "getNextCardNonce(address)uint64", method "getCardData(address)(address,address,uint64,uint64)", method "setPartnerAddress(address)void", method "setOmnibusAddress(address)void", method "setKillswitchApp(uint64)void", method "addWithdrawOperator(address)void", method "removeWithdrawOperator(address)void", method "cardDisableAsset(address,uint64)void", method "withdrawalRequest(address,uint64,uint64)(address,address,uint64,uint64,uint64,uint64)", method "withdrawalCancel(address)void", method "withdraw(address,uint64)void", method "withdrawPermissioned(address,uint64,uint64,uint64,uint64,byte[64])void", method "pauseRefund()void", method "unpauseRefund()void", method "setRefundSignerPubkey(byte[32])void", method "addRefundOperator(address)void", method "removeRefundOperator(address)void", method "getNextTreasuryNonce()uint64", method "treasuryAssetOptIn(uint64)address", method "treasuryAssetCloseOut(uint64,address)void", method "treasuryClose()void", method "cardRefund((address,uint64)[],uint64,uint64,uint64,byte[64])void", method "owner()address", method "transferOwnership(address)void", method "pauser()address", method "pause()void", method "unpause()void", method "updatePauser(address)void", method "recoverAsset(uint64,uint64,address)void"
+    bz main_create_NoOp@43
+    pushbytess 0xa1aada43 0xa050f5f1 0xbfdf95dc 0x5b277143 0x47bb9dfd 0x3fa1238b 0xad162624 0xcbee2ba1 0x745dbf16 0xda1b2789 0xac731de6 0xae796b45 0x87d99464 0x2c39c785 0x9537d509 0xb7349158 0xbbd0def0 0x13ff1ce9 0xf2e3f37f 0x9220cc84 0xa431fbe9 0x67d6b838 0x22d37217 0x9e570264 0xa9acbdec 0xe9462481 0x325fca91 0xb1bbb0a8 0xe17bafb4 0xb0d953b3 0x0178f94b 0x1b529de8 0x0cadd163 0x785a1bf9 // method "cardAssetOptIn(address,uint64)void", method "setWithdrawalTimeout(uint64)void", method "setWithdrawalPubkey(byte[32])void", method "cardCreate(address,uint64)address", method "cardClose(address)void", method "cardRecover(address,address)void", method "cardDebit(address,address,uint64,uint64,uint64,string)void", method "getNextCardNonce(address)uint64", method "getCardData(address)(address,address,uint64,uint64)", method "setPartnerAddress(address)void", method "setOmnibusAddress(address)void", method "setKillswitchApp(uint64)void", method "addWithdrawOperator(address)void", method "removeWithdrawOperator(address)void", method "cardDisableAsset(address,uint64)void", method "withdrawalRequest(address,uint64,uint64)(address,address,uint64,uint64,uint64,uint64)", method "withdrawalCancel(address)void", method "withdraw(address,uint64)void", method "withdrawPermissioned(address,uint64,uint64,uint64,uint64,byte[64])void", method "setRefundSignerPubkey(byte[32])void", method "addRefundOperator(address)void", method "removeRefundOperator(address)void", method "getNextTreasuryNonce()uint64", method "treasuryAssetOptIn(uint64)address", method "treasuryAssetCloseOut(uint64,address)void", method "treasuryClose()void", method "cardRefund((address,uint64)[],uint64,uint64,uint64,byte[64])void", method "owner()address", method "transferOwnership(address)void", method "pauser()address", method "pause()void", method "unpause()void", method "updatePauser(address)void", method "recoverAsset(uint64,uint64,address)void"
     txna ApplicationArgs 0
-    match cardAssetOptIn setWithdrawalTimeout setWithdrawalPubkey cardCreate cardClose cardRecover cardDebit getNextCardNonce getCardData setPartnerAddress setOmnibusAddress setKillswitchApp addWithdrawOperator removeWithdrawOperator cardDisableAsset withdrawalRequest withdrawalCancel withdraw withdrawPermissioned pauseRefund unpauseRefund setRefundSignerPubkey addRefundOperator removeRefundOperator getNextTreasuryNonce treasuryAssetOptIn treasuryAssetCloseOut treasuryClose cardRefund owner transferOwnership pauser pause unpause updatePauser recoverAsset
+    match cardAssetOptIn setWithdrawalTimeout setWithdrawalPubkey cardCreate cardClose cardRecover cardDebit getNextCardNonce getCardData setPartnerAddress setOmnibusAddress setKillswitchApp addWithdrawOperator removeWithdrawOperator cardDisableAsset withdrawalRequest withdrawalCancel withdraw withdrawPermissioned setRefundSignerPubkey addRefundOperator removeRefundOperator getNextTreasuryNonce treasuryAssetOptIn treasuryAssetCloseOut treasuryClose cardRefund owner transferOwnership pauser pause unpause updatePauser recoverAsset
     err
 
-main_create_NoOp@45:
-    // smart_contracts/main/contract.algo.ts:222
+main_create_NoOp@43:
+    // smart_contracts/main/contract.algo.ts:217
     // export class Main extends classes(Ownable, Pausable, Recoverable) {
     pushbytes 0x1748193d // method "deploy(address,address)address"
     txna ApplicationArgs 0
@@ -33,7 +33,7 @@ main_create_NoOp@45:
     err
 
 main_destroy_route@5:
-    // smart_contracts/main/contract.algo.ts:509
+    // smart_contracts/main/contract.algo.ts:498
     // @abimethod({ allowActions: ['DeleteApplication'] })
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -44,7 +44,7 @@ main_destroy_route@5:
     b destroy
 
 main_update_route@4:
-    // smart_contracts/main/contract.algo.ts:499
+    // smart_contracts/main/contract.algo.ts:488
     // @abimethod({ allowActions: ['UpdateApplication'] })
     txn OnCompletion
     pushint 4 // UpdateApplication
@@ -72,9 +72,9 @@ ensure_budget_while_top@1:
     itxn_field TypeEnum
     pushint 5 // DeleteApplication
     itxn_field OnCompletion
-    bytec 13 // 0x068101
+    bytec 12 // 0x068101
     itxn_field ApprovalProgram
-    bytec 13 // 0x068101
+    bytec 12 // 0x068101
     itxn_field ClearStateProgram
     frame_dig -1
     switch ensure_budget_switch_case_0@3 ensure_budget_switch_case_1@4
@@ -99,7 +99,7 @@ ensure_budget_after_while@6:
 
 // smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn[routing]() -> void:
 cardAssetOptIn:
-    // smart_contracts/main/contract.algo.ts:318
+    // smart_contracts/main/contract.algo.ts:308
     // public cardAssetOptIn(card: Account, asset: Asset): void {
     txna ApplicationArgs 1
     dup
@@ -121,7 +121,7 @@ cardAssetOptIn:
 
 // smart_contracts/main/contract.algo.ts::Main.deploy[routing]() -> void:
 deploy:
-    // smart_contracts/main/contract.algo.ts:481
+    // smart_contracts/main/contract.algo.ts:471
     // @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
     txna ApplicationArgs 1
     dup
@@ -135,52 +135,45 @@ deploy:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:483
+    // smart_contracts/main/contract.algo.ts:473
     // this._transferOwnership(owner)
     swap
     callsub _transferOwnership
-    // smart_contracts/main/contract.algo.ts:243
+    // smart_contracts/main/contract.algo.ts:238
     // public omnibus_address = GlobalState<Account>({ key: 'oa' })
-    bytec 9 // "oa"
-    // smart_contracts/main/contract.algo.ts:484
+    bytec 8 // "oa"
+    // smart_contracts/main/contract.algo.ts:474
     // this.omnibus_address.value = omnibus
     swap
     app_global_put
     // smart_contracts/roles/pausable.algo.ts:35
     // public _pauser = GlobalState<Account>()
     bytec 6 // "_pauser"
-    // smart_contracts/main/contract.algo.ts:485
+    // smart_contracts/main/contract.algo.ts:475
     // this._pauser.value = Txn.sender
     txn Sender
     app_global_put
-    // smart_contracts/main/contract.algo.ts:227
+    // smart_contracts/main/contract.algo.ts:222
     // public cards_active_count = GlobalState<uint64>({ key: 'cfac' })
     bytec 4 // "cfac"
-    // smart_contracts/main/contract.algo.ts:489
+    // smart_contracts/main/contract.algo.ts:479
     // this.cards_active_count.value = 0
     intc_0 // 0
     app_global_put
     // smart_contracts/roles/pausable.algo.ts:37
     // public paused = GlobalState<boolean>()
     bytec 7 // "paused"
-    // smart_contracts/main/contract.algo.ts:490
+    // smart_contracts/main/contract.algo.ts:480
     // this.paused.value = false
     intc_0 // 0
     app_global_put
-    // smart_contracts/main/contract.algo.ts:267
-    // public refund_paused = GlobalState<boolean>({ key: 'rpa' })
-    bytec 8 // "rpa"
-    // smart_contracts/main/contract.algo.ts:491
-    // this.refund_paused.value = false
-    intc_0 // 0
-    app_global_put
-    // smart_contracts/main/contract.algo.ts:481
+    // smart_contracts/main/contract.algo.ts:471
     // @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
     bytec_2 // 0x151f7c75
-    // smart_contracts/main/contract.algo.ts:493
+    // smart_contracts/main/contract.algo.ts:482
     // return Global.currentApplicationAddress
     global CurrentApplicationAddress
-    // smart_contracts/main/contract.algo.ts:481
+    // smart_contracts/main/contract.algo.ts:471
     // @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
     concat
     log
@@ -190,10 +183,10 @@ deploy:
 
 // smart_contracts/main/contract.algo.ts::Main.update[routing]() -> void:
 update:
-    // smart_contracts/main/contract.algo.ts:501
+    // smart_contracts/main/contract.algo.ts:490
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:499
+    // smart_contracts/main/contract.algo.ts:488
     // @abimethod({ allowActions: ['UpdateApplication'] })
     intc_1 // 1
     return
@@ -201,33 +194,33 @@ update:
 
 // smart_contracts/main/contract.algo.ts::Main.destroy[routing]() -> void:
 destroy:
-    // smart_contracts/main/contract.algo.ts:511
+    // smart_contracts/main/contract.algo.ts:500
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:514
+    // smart_contracts/main/contract.algo.ts:503
     // assert(!this.cards_active_count.value, 'CARDS_STILL_ACTIVE')
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:227
+    // smart_contracts/main/contract.algo.ts:222
     // public cards_active_count = GlobalState<uint64>({ key: 'cfac' })
     bytec 4 // "cfac"
-    // smart_contracts/main/contract.algo.ts:514
+    // smart_contracts/main/contract.algo.ts:503
     // assert(!this.cards_active_count.value, 'CARDS_STILL_ACTIVE')
     app_global_get_ex
     assert // check GlobalState exists
     !
     assert // CARDS_STILL_ACTIVE
-    // smart_contracts/main/contract.algo.ts:520
+    // smart_contracts/main/contract.algo.ts:509
     // if (this.treasury.hasValue) {
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:520
+    // smart_contracts/main/contract.algo.ts:509
     // if (this.treasury.hasValue) {
     app_global_get_ex
     bury 1
     bz destroy_after_if_else@4
-    // smart_contracts/main/contract.algo.ts:521-528
+    // smart_contracts/main/contract.algo.ts:510-517
     // itxn
     //   .payment({
     //     sender: this.treasury.value.address,
@@ -237,31 +230,31 @@ destroy:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:523
+    // smart_contracts/main/contract.algo.ts:512
     // sender: this.treasury.value.address,
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:523
+    // smart_contracts/main/contract.algo.ts:512
     // sender: this.treasury.value.address,
     app_global_get_ex
     assert // check GlobalState exists
     extract 0 32
-    // smart_contracts/main/contract.algo.ts:524
+    // smart_contracts/main/contract.algo.ts:513
     // receiver: Global.currentApplicationAddress,
     global CurrentApplicationAddress
-    // smart_contracts/main/contract.algo.ts:526
+    // smart_contracts/main/contract.algo.ts:515
     // closeRemainderTo: Global.currentApplicationAddress,
     dup
     itxn_field CloseRemainderTo
-    // smart_contracts/main/contract.algo.ts:525
+    // smart_contracts/main/contract.algo.ts:514
     // amount: 0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:521-527
+    // smart_contracts/main/contract.algo.ts:510-516
     // itxn
     //   .payment({
     //     sender: this.treasury.value.address,
@@ -273,7 +266,7 @@ destroy:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:521-528
+    // smart_contracts/main/contract.algo.ts:510-517
     // itxn
     //   .payment({
     //     sender: this.treasury.value.address,
@@ -285,7 +278,7 @@ destroy:
     itxn_submit
 
 destroy_after_if_else@4:
-    // smart_contracts/main/contract.algo.ts:531-537
+    // smart_contracts/main/contract.algo.ts:520-526
     // itxn
     //   .payment({
     //     receiver: Global.currentApplicationAddress,
@@ -294,7 +287,7 @@ destroy_after_if_else@4:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:533
+    // smart_contracts/main/contract.algo.ts:522
     // receiver: Global.currentApplicationAddress,
     global CurrentApplicationAddress
     // smart_contracts/roles/ownable.algo.ts:66
@@ -308,12 +301,12 @@ destroy_after_if_else@4:
     app_global_get_ex
     assert // check GlobalState exists
     itxn_field CloseRemainderTo
-    // smart_contracts/main/contract.algo.ts:534
+    // smart_contracts/main/contract.algo.ts:523
     // amount: 0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // smart_contracts/main/contract.algo.ts:531-536
+    // smart_contracts/main/contract.algo.ts:520-525
     // itxn
     //   .payment({
     //     receiver: Global.currentApplicationAddress,
@@ -324,7 +317,7 @@ destroy_after_if_else@4:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:531-537
+    // smart_contracts/main/contract.algo.ts:520-526
     // itxn
     //   .payment({
     //     receiver: Global.currentApplicationAddress,
@@ -333,7 +326,7 @@ destroy_after_if_else@4:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:509
+    // smart_contracts/main/contract.algo.ts:498
     // @abimethod({ allowActions: ['DeleteApplication'] })
     intc_1 // 1
     return
@@ -341,7 +334,7 @@ destroy_after_if_else@4:
 
 // smart_contracts/main/contract.algo.ts::Main.setWithdrawalTimeout[routing]() -> void:
 setWithdrawalTimeout:
-    // smart_contracts/main/contract.algo.ts:545
+    // smart_contracts/main/contract.algo.ts:534
     // public setWithdrawalTimeout(seconds: uint64): void {
     txna ApplicationArgs 1
     dup
@@ -350,17 +343,17 @@ setWithdrawalTimeout:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/main/contract.algo.ts:546
+    // smart_contracts/main/contract.algo.ts:535
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:230
+    // smart_contracts/main/contract.algo.ts:225
     // public withdrawal_wait_time = GlobalState<uint64>({ key: 'wwt' })
-    bytec 14 // "wwt"
-    // smart_contracts/main/contract.algo.ts:548
+    bytec 13 // "wwt"
+    // smart_contracts/main/contract.algo.ts:537
     // this.withdrawal_wait_time.value = seconds
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:545
+    // smart_contracts/main/contract.algo.ts:534
     // public setWithdrawalTimeout(seconds: uint64): void {
     intc_1 // 1
     return
@@ -368,7 +361,7 @@ setWithdrawalTimeout:
 
 // smart_contracts/main/contract.algo.ts::Main.setWithdrawalPubkey[routing]() -> void:
 setWithdrawalPubkey:
-    // smart_contracts/main/contract.algo.ts:555
+    // smart_contracts/main/contract.algo.ts:544
     // public setWithdrawalPubkey(pubkey: bytes<32>): void {
     txna ApplicationArgs 1
     dup
@@ -376,17 +369,17 @@ setWithdrawalPubkey:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:556
+    // smart_contracts/main/contract.algo.ts:545
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:233
+    // smart_contracts/main/contract.algo.ts:228
     // public withdrawal_pubkey = GlobalState<bytes<32>>({ key: 'pwpk' })
-    bytec 15 // "pwpk"
-    // smart_contracts/main/contract.algo.ts:558
+    bytec 14 // "pwpk"
+    // smart_contracts/main/contract.algo.ts:547
     // this.withdrawal_pubkey.value = pubkey
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:555
+    // smart_contracts/main/contract.algo.ts:544
     // public setWithdrawalPubkey(pubkey: bytes<32>): void {
     intc_1 // 1
     return
@@ -394,7 +387,7 @@ setWithdrawalPubkey:
 
 // smart_contracts/main/contract.algo.ts::Main.cardCreate[routing]() -> void:
 cardCreate:
-    // smart_contracts/main/contract.algo.ts:568
+    // smart_contracts/main/contract.algo.ts:557
     // public cardCreate(cardOwner: Account, asset: Asset): Account {
     txna ApplicationArgs 1
     dupn 2
@@ -412,14 +405,14 @@ cardCreate:
     dup
     cover 2
     cover 3
-    // smart_contracts/main/contract.algo.ts:300
+    // smart_contracts/main/contract.algo.ts:290
     // assert(this.isPartner(), 'SENDER_NOT_ALLOWED')
     callsub isPartner
     assert // SENDER_NOT_ALLOWED
-    // smart_contracts/main/contract.algo.ts:573
+    // smart_contracts/main/contract.algo.ts:562
     // address: Global.zeroAddress,
     global ZeroAddress
-    // smart_contracts/main/contract.algo.ts:571-576
+    // smart_contracts/main/contract.algo.ts:560-565
     // const cardData: CardData = {
     //   owner: cardOwner,
     //   address: Global.zeroAddress,
@@ -427,10 +420,10 @@ cardCreate:
     //   withdrawalNonce: 0,
     // }
     concat
-    // smart_contracts/main/contract.algo.ts:574
+    // smart_contracts/main/contract.algo.ts:563
     // nonce: 0,
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:571-576
+    // smart_contracts/main/contract.algo.ts:560-565
     // const cardData: CardData = {
     //   owner: cardOwner,
     //   address: Global.zeroAddress,
@@ -443,30 +436,30 @@ cardCreate:
     concat
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:580-584
+    // smart_contracts/main/contract.algo.ts:569-573
     // const cardAddr = arc4.abiCall<typeof ControlledAddress.prototype.new>({
     //   approvalProgram: compiledCard.approvalProgram,
     //   clearStateProgram: compiledCard.clearStateProgram,
     //   onCompletion: OnCompleteAction.DeleteApplication,
     // }).returnValue
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:583
+    // smart_contracts/main/contract.algo.ts:572
     // onCompletion: OnCompleteAction.DeleteApplication,
     pushint 5
     itxn_field OnCompletion
-    // smart_contracts/main/contract.algo.ts:579
+    // smart_contracts/main/contract.algo.ts:568
     // const compiledCard = compile(ControlledAddress)
-    bytec 16 // base64(C4EBQw==)
+    bytec 15 // base64(C4EBQw==)
     itxn_field ClearStateProgramPages
-    bytec 17 // base64(CyACAAGABFYdL+o2GgCOAQABADEZgQUSMRgUEERCAACxMgoyDrIgIrIIsgcjshAisgGzgAQVH3x1MgpQsCND)
+    bytec 16 // base64(CyACAAGABFYdL+o2GgCOAQABADEZgQUSMRgUEERCAACxMgoyDrIgIrIIsgcjshAisgGzgAQVH3x1MgpQsCND)
     itxn_field ApprovalProgramPages
-    // smart_contracts/main/contract.algo.ts:580-584
+    // smart_contracts/main/contract.algo.ts:569-573
     // const cardAddr = arc4.abiCall<typeof ControlledAddress.prototype.new>({
     //   approvalProgram: compiledCard.approvalProgram,
     //   clearStateProgram: compiledCard.clearStateProgram,
     //   onCompletion: OnCompleteAction.DeleteApplication,
     // }).returnValue
-    bytec 18 // method "new()address"
+    bytec 17 // method "new()address"
     itxn_field ApplicationArgs
     pushint 6 // appl
     itxn_field TypeEnum
@@ -488,17 +481,17 @@ cardCreate:
     intc_2 // 32
     ==
     assert // invalid number of bytes for account
-    // smart_contracts/main/contract.algo.ts:587
+    // smart_contracts/main/contract.algo.ts:576
     // cardData.address = cardAddr
     replace2 32
     cover 2
-    // smart_contracts/main/contract.algo.ts:590
+    // smart_contracts/main/contract.algo.ts:579
     // const assetMbr: uint64 = asset.id ? Global.assetOptInMinBalance : 0
     bz cardCreate_ternary_false@4
     global AssetOptInMinBalance
 
 cardCreate_ternary_merge@5:
-    // smart_contracts/main/contract.algo.ts:591-596
+    // smart_contracts/main/contract.algo.ts:580-585
     // itxn
     //   .payment({
     //     receiver: cardAddr,
@@ -506,14 +499,14 @@ cardCreate_ternary_merge@5:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:594
+    // smart_contracts/main/contract.algo.ts:583
     // amount: Global.minBalance + assetMbr,
     global MinBalance
     +
     itxn_field Amount
     dupn 2
     itxn_field Receiver
-    // smart_contracts/main/contract.algo.ts:591-595
+    // smart_contracts/main/contract.algo.ts:580-584
     // itxn
     //   .payment({
     //     receiver: cardAddr,
@@ -523,7 +516,7 @@ cardCreate_ternary_merge@5:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:591-596
+    // smart_contracts/main/contract.algo.ts:580-585
     // itxn
     //   .payment({
     //     receiver: cardAddr,
@@ -531,46 +524,46 @@ cardCreate_ternary_merge@5:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:599
+    // smart_contracts/main/contract.algo.ts:588
     // this.cards(cardAddr).value = clone(cardData)
     uncover 2
     box_put
-    // smart_contracts/main/contract.algo.ts:602
+    // smart_contracts/main/contract.algo.ts:591
     // this.cards_active_count.value = this.cards_active_count.value + 1
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:227
+    // smart_contracts/main/contract.algo.ts:222
     // public cards_active_count = GlobalState<uint64>({ key: 'cfac' })
     bytec 4 // "cfac"
-    // smart_contracts/main/contract.algo.ts:602
+    // smart_contracts/main/contract.algo.ts:591
     // this.cards_active_count.value = this.cards_active_count.value + 1
     app_global_get_ex
     assert // check GlobalState exists
     intc_1 // 1
     +
-    // smart_contracts/main/contract.algo.ts:227
+    // smart_contracts/main/contract.algo.ts:222
     // public cards_active_count = GlobalState<uint64>({ key: 'cfac' })
     bytec 4 // "cfac"
-    // smart_contracts/main/contract.algo.ts:602
+    // smart_contracts/main/contract.algo.ts:591
     // this.cards_active_count.value = this.cards_active_count.value + 1
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:605
+    // smart_contracts/main/contract.algo.ts:594
     // if (asset.id) {
     dig 2
     bz cardCreate_after_if_else@8
-    // smart_contracts/main/contract.algo.ts:606
+    // smart_contracts/main/contract.algo.ts:595
     // this.cardAssetOptIn(cardAddr, asset)
     dup
     dig 3
     callsub smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn
 
 cardCreate_after_if_else@8:
-    // smart_contracts/main/contract.algo.ts:609-612
+    // smart_contracts/main/contract.algo.ts:598-601
     // emit<CardCreated>({
     //   cardOwner: cardOwner,
     //   card: cardAddr,
@@ -582,7 +575,7 @@ cardCreate_after_if_else@8:
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:568
+    // smart_contracts/main/contract.algo.ts:557
     // public cardCreate(cardOwner: Account, asset: Asset): Account {
     bytec_2 // 0x151f7c75
     swap
@@ -592,7 +585,7 @@ cardCreate_after_if_else@8:
     return
 
 cardCreate_ternary_false@4:
-    // smart_contracts/main/contract.algo.ts:590
+    // smart_contracts/main/contract.algo.ts:579
     // const assetMbr: uint64 = asset.id ? Global.assetOptInMinBalance : 0
     intc_0 // 0
     b cardCreate_ternary_merge@5
@@ -600,7 +593,7 @@ cardCreate_ternary_false@4:
 
 // smart_contracts/main/contract.algo.ts::Main.cardClose[routing]() -> void:
 cardClose:
-    // smart_contracts/main/contract.algo.ts:623
+    // smart_contracts/main/contract.algo.ts:612
     // public cardClose(card: Account): void {
     txna ApplicationArgs 1
     dupn 2
@@ -608,23 +601,23 @@ cardClose:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     swap
     concat
     dupn 2
-    // smart_contracts/main/contract.algo.ts:624
+    // smart_contracts/main/contract.algo.ts:613
     // assert(this.cards(card).exists, 'CARD_NOT_FOUND')
     box_len
     bury 1
     assert // CARD_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:625
+    // smart_contracts/main/contract.algo.ts:614
     // const cardOwner = this.cards(card).value.owner
     box_get
     pop
     extract 0 32
-    // smart_contracts/main/contract.algo.ts:626
+    // smart_contracts/main/contract.algo.ts:615
     // assert(this.isPartner() || cardOwner === Txn.sender, 'SENDER_NOT_ALLOWED')
     callsub isPartner
     bnz cardClose_bool_true@3
@@ -637,16 +630,16 @@ cardClose_bool_true@3:
     intc_1 // 1
 
 cardClose_bool_merge@5:
-    // smart_contracts/main/contract.algo.ts:626
+    // smart_contracts/main/contract.algo.ts:615
     // assert(this.isPartner() || cardOwner === Txn.sender, 'SENDER_NOT_ALLOWED')
     assert // SENDER_NOT_ALLOWED
-    // smart_contracts/main/contract.algo.ts:630
+    // smart_contracts/main/contract.algo.ts:619
     // this.clearWithdrawalRequest(cardOwner, card)
     uncover 2
     dup
     cover 2
     callsub clearWithdrawalRequest
-    // smart_contracts/main/contract.algo.ts:634-641
+    // smart_contracts/main/contract.algo.ts:623-630
     // itxn
     //   .payment({
     //     sender: card,
@@ -656,20 +649,20 @@ cardClose_bool_merge@5:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:637
+    // smart_contracts/main/contract.algo.ts:626
     // receiver: Global.currentApplicationAddress,
     global CurrentApplicationAddress
-    // smart_contracts/main/contract.algo.ts:639
+    // smart_contracts/main/contract.algo.ts:628
     // closeRemainderTo: Global.currentApplicationAddress,
     dup
     itxn_field CloseRemainderTo
-    // smart_contracts/main/contract.algo.ts:638
+    // smart_contracts/main/contract.algo.ts:627
     // amount: 0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:634-640
+    // smart_contracts/main/contract.algo.ts:623-629
     // itxn
     //   .payment({
     //     sender: card,
@@ -681,7 +674,7 @@ cardClose_bool_merge@5:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:634-641
+    // smart_contracts/main/contract.algo.ts:623-630
     // itxn
     //   .payment({
     //     sender: card,
@@ -691,30 +684,30 @@ cardClose_bool_merge@5:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:644
+    // smart_contracts/main/contract.algo.ts:633
     // this.cards(card).delete()
     box_del
     pop
-    // smart_contracts/main/contract.algo.ts:647
+    // smart_contracts/main/contract.algo.ts:636
     // this.cards_active_count.value = this.cards_active_count.value - 1
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:227
+    // smart_contracts/main/contract.algo.ts:222
     // public cards_active_count = GlobalState<uint64>({ key: 'cfac' })
     bytec 4 // "cfac"
-    // smart_contracts/main/contract.algo.ts:647
+    // smart_contracts/main/contract.algo.ts:636
     // this.cards_active_count.value = this.cards_active_count.value - 1
     app_global_get_ex
     assert // check GlobalState exists
     intc_1 // 1
     -
-    // smart_contracts/main/contract.algo.ts:227
+    // smart_contracts/main/contract.algo.ts:222
     // public cards_active_count = GlobalState<uint64>({ key: 'cfac' })
     bytec 4 // "cfac"
-    // smart_contracts/main/contract.algo.ts:647
+    // smart_contracts/main/contract.algo.ts:636
     // this.cards_active_count.value = this.cards_active_count.value - 1
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:623
+    // smart_contracts/main/contract.algo.ts:612
     // public cardClose(card: Account): void {
     intc_1 // 1
     return
@@ -726,7 +719,7 @@ cardClose_bool_false@4:
 
 // smart_contracts/main/contract.algo.ts::Main.cardRecover[routing]() -> void:
 cardRecover:
-    // smart_contracts/main/contract.algo.ts:657
+    // smart_contracts/main/contract.algo.ts:646
     // public cardRecover(card: Account, newCardHolder: Account): void {
     txna ApplicationArgs 1
     dup
@@ -740,38 +733,38 @@ cardRecover:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:658
+    // smart_contracts/main/contract.algo.ts:647
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     dig 2
     concat
-    // smart_contracts/main/contract.algo.ts:659
+    // smart_contracts/main/contract.algo.ts:648
     // assert(this.cards(card).exists, 'CARD_NOT_FOUND')
     dup
     box_len
     bury 1
     assert // CARD_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:661
+    // smart_contracts/main/contract.algo.ts:650
     // const oldCardHolder = this.cards(card).value.owner
     dup
     box_get
     pop
     extract 0 32
-    // smart_contracts/main/contract.algo.ts:665
+    // smart_contracts/main/contract.algo.ts:654
     // this.clearWithdrawalRequest(oldCardHolder, card)
     dup
     dig 4
     callsub clearWithdrawalRequest
-    // smart_contracts/main/contract.algo.ts:667
+    // smart_contracts/main/contract.algo.ts:656
     // this.cards(card).value.owner = newCardHolder
     swap
     intc_0 // 0
     dig 3
     box_replace // on error: index out of bounds
-    // smart_contracts/main/contract.algo.ts:669-673
+    // smart_contracts/main/contract.algo.ts:658-662
     // emit<CardRecovered>({
     //   card: card,
     //   oldCardOwner: oldCardHolder,
@@ -786,7 +779,7 @@ cardRecover:
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:657
+    // smart_contracts/main/contract.algo.ts:646
     // public cardRecover(card: Account, newCardHolder: Account): void {
     intc_1 // 1
     return
@@ -794,7 +787,7 @@ cardRecover:
 
 // smart_contracts/main/contract.algo.ts::Main.cardDebit[routing]() -> void:
 cardDebit:
-    // smart_contracts/main/contract.algo.ts:688
+    // smart_contracts/main/contract.algo.ts:677
     // public cardDebit(cardOwner: Account, card: Account, asset: Asset, amount: uint64, nonce: uint64, ref: string): void {
     txna ApplicationArgs 1
     dup
@@ -840,38 +833,29 @@ cardDebit:
     ==
     assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
     extract 2 0
-    // smart_contracts/roles/pausable.algo.ts:44
-    // assert(!this.paused.value, 'CONTRACT_PAUSED')
-    intc_0 // 0
-    // smart_contracts/roles/pausable.algo.ts:37
-    // public paused = GlobalState<boolean>()
-    bytec 7 // "paused"
-    // smart_contracts/roles/pausable.algo.ts:44
-    // assert(!this.paused.value, 'CONTRACT_PAUSED')
-    app_global_get_ex
-    assert // check GlobalState exists
-    !
-    assert // CONTRACT_PAUSED
-    // smart_contracts/main/contract.algo.ts:247
+    // smart_contracts/main/contract.algo.ts:678
+    // this.whenNotPaused()
+    callsub whenNotPaused
+    // smart_contracts/main/contract.algo.ts:242
     // public withdraw_operators = BoxMap<Account, uint64>({ keyPrefix: 'wop' })
-    bytec 10 // "wop"
-    // smart_contracts/main/contract.algo.ts:307
+    bytec 9 // "wop"
+    // smart_contracts/main/contract.algo.ts:297
     // assert(this.withdraw_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
     txn Sender
-    // smart_contracts/main/contract.algo.ts:247
+    // smart_contracts/main/contract.algo.ts:242
     // public withdraw_operators = BoxMap<Account, uint64>({ keyPrefix: 'wop' })
     concat
-    // smart_contracts/main/contract.algo.ts:307
+    // smart_contracts/main/contract.algo.ts:297
     // assert(this.withdraw_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
     box_len
     bury 1
     assert // SENDER_NOT_ALLOWED
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     dig 5
     concat
-    // smart_contracts/main/contract.algo.ts:693
+    // smart_contracts/main/contract.algo.ts:682
     // assert(this.cards(card).value.owner === cardOwner, 'OWNER_INVALID')
     dup
     box_get
@@ -881,17 +865,17 @@ cardDebit:
     uncover 8
     ==
     assert // OWNER_INVALID
-    // smart_contracts/main/contract.algo.ts:696
+    // smart_contracts/main/contract.algo.ts:685
     // const nextNonce: uint64 = this.cards(card).value.nonce
     pushint 64
     extract_uint64
-    // smart_contracts/main/contract.algo.ts:697
+    // smart_contracts/main/contract.algo.ts:686
     // assert(nextNonce === nonce, 'NONCE_INVALID')
     dup
     dig 4
     ==
     assert // NONCE_INVALID
-    // smart_contracts/main/contract.algo.ts:699-707
+    // smart_contracts/main/contract.algo.ts:688-696
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -902,13 +886,13 @@ cardDebit:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:702
+    // smart_contracts/main/contract.algo.ts:691
     // assetReceiver: this.omnibus_address.value,
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:243
+    // smart_contracts/main/contract.algo.ts:238
     // public omnibus_address = GlobalState<Account>({ key: 'oa' })
-    bytec 9 // "oa"
-    // smart_contracts/main/contract.algo.ts:702
+    bytec 8 // "oa"
+    // smart_contracts/main/contract.algo.ts:691
     // assetReceiver: this.omnibus_address.value,
     app_global_get_ex
     assert // check GlobalState exists
@@ -921,7 +905,7 @@ cardDebit:
     itxn_field AssetReceiver
     dig 6
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:699-706
+    // smart_contracts/main/contract.algo.ts:688-695
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -934,7 +918,7 @@ cardDebit:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:699-707
+    // smart_contracts/main/contract.algo.ts:688-696
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -945,7 +929,7 @@ cardDebit:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:709-715
+    // smart_contracts/main/contract.algo.ts:698-704
     // emit<Debit>({
     //   card: card,
     //   asset: asset,
@@ -979,7 +963,7 @@ cardDebit:
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:718
+    // smart_contracts/main/contract.algo.ts:707
     // this.cards(card).value.nonce = nextNonce + 1
     intc_1 // 1
     +
@@ -987,7 +971,7 @@ cardDebit:
     pushint 64
     swap
     box_replace // on error: index out of bounds
-    // smart_contracts/main/contract.algo.ts:688
+    // smart_contracts/main/contract.algo.ts:677
     // public cardDebit(cardOwner: Account, card: Account, asset: Asset, amount: uint64, nonce: uint64, ref: string): void {
     intc_1 // 1
     return
@@ -995,7 +979,7 @@ cardDebit:
 
 // smart_contracts/main/contract.algo.ts::Main.getNextCardNonce[routing]() -> void:
 getNextCardNonce:
-    // smart_contracts/main/contract.algo.ts:727
+    // smart_contracts/main/contract.algo.ts:716
     // @abimethod({ readonly: true })
     txna ApplicationArgs 1
     dup
@@ -1003,17 +987,17 @@ getNextCardNonce:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:729
+    // smart_contracts/main/contract.algo.ts:718
     // return this.cards(card).value.nonce
     box_get
     assert // Box must have value
     extract 64 8
-    // smart_contracts/main/contract.algo.ts:727
+    // smart_contracts/main/contract.algo.ts:716
     // @abimethod({ readonly: true })
     bytec_2 // 0x151f7c75
     swap
@@ -1025,7 +1009,7 @@ getNextCardNonce:
 
 // smart_contracts/main/contract.algo.ts::Main.getCardData[routing]() -> void:
 getCardData:
-    // smart_contracts/main/contract.algo.ts:738
+    // smart_contracts/main/contract.algo.ts:727
     // @abimethod({ readonly: true })
     txna ApplicationArgs 1
     dup
@@ -1033,16 +1017,16 @@ getCardData:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:740
+    // smart_contracts/main/contract.algo.ts:729
     // return this.cards(card).value
     box_get
     assert // Box must have value
-    // smart_contracts/main/contract.algo.ts:738
+    // smart_contracts/main/contract.algo.ts:727
     // @abimethod({ readonly: true })
     bytec_2 // 0x151f7c75
     swap
@@ -1054,7 +1038,7 @@ getCardData:
 
 // smart_contracts/main/contract.algo.ts::Main.setPartnerAddress[routing]() -> void:
 setPartnerAddress:
-    // smart_contracts/main/contract.algo.ts:749
+    // smart_contracts/main/contract.algo.ts:738
     // public setPartnerAddress(newPartnerAddress: Account): void {
     txna ApplicationArgs 1
     dup
@@ -1062,17 +1046,17 @@ setPartnerAddress:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:750
+    // smart_contracts/main/contract.algo.ts:739
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:240
+    // smart_contracts/main/contract.algo.ts:235
     // public partner_address = GlobalState<Account>({ key: 'pa' })
-    bytec 19 // "pa"
-    // smart_contracts/main/contract.algo.ts:752
+    bytec 18 // "pa"
+    // smart_contracts/main/contract.algo.ts:741
     // this.partner_address.value = newPartnerAddress
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:749
+    // smart_contracts/main/contract.algo.ts:738
     // public setPartnerAddress(newPartnerAddress: Account): void {
     intc_1 // 1
     return
@@ -1080,7 +1064,7 @@ setPartnerAddress:
 
 // smart_contracts/main/contract.algo.ts::Main.setOmnibusAddress[routing]() -> void:
 setOmnibusAddress:
-    // smart_contracts/main/contract.algo.ts:761
+    // smart_contracts/main/contract.algo.ts:750
     // public setOmnibusAddress(newOmnibusAddress: Account): void {
     txna ApplicationArgs 1
     dup
@@ -1088,17 +1072,17 @@ setOmnibusAddress:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:762
+    // smart_contracts/main/contract.algo.ts:751
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:243
+    // smart_contracts/main/contract.algo.ts:238
     // public omnibus_address = GlobalState<Account>({ key: 'oa' })
-    bytec 9 // "oa"
-    // smart_contracts/main/contract.algo.ts:764
+    bytec 8 // "oa"
+    // smart_contracts/main/contract.algo.ts:753
     // this.omnibus_address.value = newOmnibusAddress
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:761
+    // smart_contracts/main/contract.algo.ts:750
     // public setOmnibusAddress(newOmnibusAddress: Account): void {
     intc_1 // 1
     return
@@ -1106,7 +1090,7 @@ setOmnibusAddress:
 
 // smart_contracts/main/contract.algo.ts::Main.setKillswitchApp[routing]() -> void:
 setKillswitchApp:
-    // smart_contracts/main/contract.algo.ts:775
+    // smart_contracts/main/contract.algo.ts:764
     // public setKillswitchApp(newKillswitchApp: Application): void {
     txna ApplicationArgs 1
     dup
@@ -1115,17 +1099,17 @@ setKillswitchApp:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/main/contract.algo.ts:776
+    // smart_contracts/main/contract.algo.ts:765
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:252
+    // smart_contracts/main/contract.algo.ts:247
     // public killswitch_app = GlobalState<Application>({ key: 'ks' })
-    bytec 11 // "ks"
-    // smart_contracts/main/contract.algo.ts:778
+    bytec 10 // "ks"
+    // smart_contracts/main/contract.algo.ts:767
     // this.killswitch_app.value = newKillswitchApp
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:775
+    // smart_contracts/main/contract.algo.ts:764
     // public setKillswitchApp(newKillswitchApp: Application): void {
     intc_1 // 1
     return
@@ -1133,7 +1117,7 @@ setKillswitchApp:
 
 // smart_contracts/main/contract.algo.ts::Main.addWithdrawOperator[routing]() -> void:
 addWithdrawOperator:
-    // smart_contracts/main/contract.algo.ts:787
+    // smart_contracts/main/contract.algo.ts:776
     // public addWithdrawOperator(operator: Account): void {
     txna ApplicationArgs 1
     dup
@@ -1141,20 +1125,20 @@ addWithdrawOperator:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:788
+    // smart_contracts/main/contract.algo.ts:777
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:247
+    // smart_contracts/main/contract.algo.ts:242
     // public withdraw_operators = BoxMap<Account, uint64>({ keyPrefix: 'wop' })
-    bytec 10 // "wop"
+    bytec 9 // "wop"
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:790
+    // smart_contracts/main/contract.algo.ts:779
     // this.withdraw_operators(operator).value = 1
     intc_1 // 1
     itob
     box_put
-    // smart_contracts/main/contract.algo.ts:787
+    // smart_contracts/main/contract.algo.ts:776
     // public addWithdrawOperator(operator: Account): void {
     intc_1 // 1
     return
@@ -1162,7 +1146,7 @@ addWithdrawOperator:
 
 // smart_contracts/main/contract.algo.ts::Main.removeWithdrawOperator[routing]() -> void:
 removeWithdrawOperator:
-    // smart_contracts/main/contract.algo.ts:799
+    // smart_contracts/main/contract.algo.ts:788
     // public removeWithdrawOperator(operator: Account): void {
     txna ApplicationArgs 1
     dup
@@ -1170,19 +1154,19 @@ removeWithdrawOperator:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:800
+    // smart_contracts/main/contract.algo.ts:789
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:247
+    // smart_contracts/main/contract.algo.ts:242
     // public withdraw_operators = BoxMap<Account, uint64>({ keyPrefix: 'wop' })
-    bytec 10 // "wop"
+    bytec 9 // "wop"
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:802
+    // smart_contracts/main/contract.algo.ts:791
     // this.withdraw_operators(operator).delete()
     box_del
     pop
-    // smart_contracts/main/contract.algo.ts:799
+    // smart_contracts/main/contract.algo.ts:788
     // public removeWithdrawOperator(operator: Account): void {
     intc_1 // 1
     return
@@ -1190,7 +1174,7 @@ removeWithdrawOperator:
 
 // smart_contracts/main/contract.algo.ts::Main.cardDisableAsset[routing]() -> void:
 cardDisableAsset:
-    // smart_contracts/main/contract.algo.ts:820
+    // smart_contracts/main/contract.algo.ts:809
     // public cardDisableAsset(card: Account, asset: Asset): void {
     txna ApplicationArgs 1
     dupn 2
@@ -1208,24 +1192,24 @@ cardDisableAsset:
     assert // invalid number of bytes for arc4.uint64
     btoi
     swap
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:821
+    // smart_contracts/main/contract.algo.ts:810
     // assert(this.cards(card).exists, 'CARD_NOT_FOUND')
     dup
     box_len
     bury 1
     assert // CARD_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:822
+    // smart_contracts/main/contract.algo.ts:811
     // const cardOwner = this.cards(card).value.owner
     box_get
     pop
     extract 0 32
     cover 2
-    // smart_contracts/main/contract.algo.ts:823
+    // smart_contracts/main/contract.algo.ts:812
     // assert(this.isPartner() || cardOwner === Txn.sender, 'SENDER_NOT_ALLOWED')
     callsub isPartner
     bnz cardDisableAsset_bool_true@3
@@ -1238,10 +1222,10 @@ cardDisableAsset_bool_true@3:
     intc_1 // 1
 
 cardDisableAsset_bool_merge@5:
-    // smart_contracts/main/contract.algo.ts:823
+    // smart_contracts/main/contract.algo.ts:812
     // assert(this.isPartner() || cardOwner === Txn.sender, 'SENDER_NOT_ALLOWED')
     assert // SENDER_NOT_ALLOWED
-    // smart_contracts/main/contract.algo.ts:366-374
+    // smart_contracts/main/contract.algo.ts:356-364
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -1252,7 +1236,7 @@ cardDisableAsset_bool_merge@5:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:372
+    // smart_contracts/main/contract.algo.ts:362
     // assetAmount: 0,
     intc_0 // 0
     itxn_field AssetAmount
@@ -1265,7 +1249,7 @@ cardDisableAsset_bool_merge@5:
     itxn_field AssetReceiver
     dup
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:366-373
+    // smart_contracts/main/contract.algo.ts:356-363
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -1278,7 +1262,7 @@ cardDisableAsset_bool_merge@5:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:366-374
+    // smart_contracts/main/contract.algo.ts:356-364
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -1289,7 +1273,7 @@ cardDisableAsset_bool_merge@5:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:376
+    // smart_contracts/main/contract.algo.ts:366
     // if (card.balance > card.minBalance) {
     dup
     acct_params_get AcctBalance
@@ -1299,7 +1283,7 @@ cardDisableAsset_bool_merge@5:
     assert // account funded
     >
     bz cardDisableAsset_after_if_else@8
-    // smart_contracts/main/contract.algo.ts:377-383
+    // smart_contracts/main/contract.algo.ts:367-373
     // itxn
     //   .payment({
     //     sender: card,
@@ -1308,10 +1292,10 @@ cardDisableAsset_bool_merge@5:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:380
+    // smart_contracts/main/contract.algo.ts:370
     // receiver: Global.currentApplicationAddress,
     global CurrentApplicationAddress
-    // smart_contracts/main/contract.algo.ts:381
+    // smart_contracts/main/contract.algo.ts:371
     // amount: card.balance - card.minBalance,
     dig 2
     dup
@@ -1324,7 +1308,7 @@ cardDisableAsset_bool_merge@5:
     itxn_field Amount
     itxn_field Sender
     itxn_field Receiver
-    // smart_contracts/main/contract.algo.ts:377-382
+    // smart_contracts/main/contract.algo.ts:367-372
     // itxn
     //   .payment({
     //     sender: card,
@@ -1335,7 +1319,7 @@ cardDisableAsset_bool_merge@5:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:377-383
+    // smart_contracts/main/contract.algo.ts:367-373
     // itxn
     //   .payment({
     //     sender: card,
@@ -1346,7 +1330,7 @@ cardDisableAsset_bool_merge@5:
     itxn_submit
 
 cardDisableAsset_after_if_else@8:
-    // smart_contracts/main/contract.algo.ts:386-389
+    // smart_contracts/main/contract.algo.ts:376-379
     // emit<CardAssetDisabled>({
     //   card: card,
     //   asset: asset,
@@ -1357,35 +1341,35 @@ cardDisableAsset_after_if_else@8:
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:430
+    // smart_contracts/main/contract.algo.ts:420
     // if (!this.killswitch_app.hasValue) {
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:252
+    // smart_contracts/main/contract.algo.ts:247
     // public killswitch_app = GlobalState<Application>({ key: 'ks' })
-    bytec 11 // "ks"
-    // smart_contracts/main/contract.algo.ts:430
+    bytec 10 // "ks"
+    // smart_contracts/main/contract.algo.ts:420
     // if (!this.killswitch_app.hasValue) {
     app_global_get_ex
     bury 1
     bz cardDisableAsset_after_inlined_smart_contracts/main/contract.algo.ts::Main.killDelegation@13
-    // smart_contracts/main/contract.algo.ts:434-437
+    // smart_contracts/main/contract.algo.ts:424-427
     // arc4.abiCall<typeof Killswitch.prototype.killFor>({
     //   appId: this.killswitch_app.value,
     //   args: [owner, asset],
     // })
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:435
+    // smart_contracts/main/contract.algo.ts:425
     // appId: this.killswitch_app.value,
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:252
+    // smart_contracts/main/contract.algo.ts:247
     // public killswitch_app = GlobalState<Application>({ key: 'ks' })
-    bytec 11 // "ks"
-    // smart_contracts/main/contract.algo.ts:435
+    bytec 10 // "ks"
+    // smart_contracts/main/contract.algo.ts:425
     // appId: this.killswitch_app.value,
     app_global_get_ex
     assert // check GlobalState exists
     itxn_field ApplicationID
-    // smart_contracts/main/contract.algo.ts:434-437
+    // smart_contracts/main/contract.algo.ts:424-427
     // arc4.abiCall<typeof Killswitch.prototype.killFor>({
     //   appId: this.killswitch_app.value,
     //   args: [owner, asset],
@@ -1403,7 +1387,7 @@ cardDisableAsset_after_if_else@8:
     itxn_submit
 
 cardDisableAsset_after_inlined_smart_contracts/main/contract.algo.ts::Main.killDelegation@13:
-    // smart_contracts/main/contract.algo.ts:820
+    // smart_contracts/main/contract.algo.ts:809
     // public cardDisableAsset(card: Account, asset: Asset): void {
     intc_1 // 1
     return
@@ -1415,7 +1399,7 @@ cardDisableAsset_bool_false@4:
 
 // smart_contracts/main/contract.algo.ts::Main.withdrawalRequest[routing]() -> void:
 withdrawalRequest:
-    // smart_contracts/main/contract.algo.ts:835
+    // smart_contracts/main/contract.algo.ts:824
     // @abimethod({ allowActions: ['NoOp'] })
     txna ApplicationArgs 1
     dup
@@ -1437,41 +1421,41 @@ withdrawalRequest:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/main/contract.algo.ts:837
+    // smart_contracts/main/contract.algo.ts:826
     // this.onlyCardOwner(card)
     dig 2
     callsub onlyCardOwner
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     dig 3
     concat
-    // smart_contracts/main/contract.algo.ts:838
+    // smart_contracts/main/contract.algo.ts:827
     // const cardData = clone(this.cards(card).value)
     box_get
     assert // Box must have value
-    // smart_contracts/main/contract.algo.ts:839
+    // smart_contracts/main/contract.algo.ts:828
     // const [balance] = op.AssetHolding.assetBalance(card, asset)
     dig 3
     dig 3
     asset_holding_get AssetBalance
     pop
-    // smart_contracts/main/contract.algo.ts:840
+    // smart_contracts/main/contract.algo.ts:829
     // assert(amount <= balance, 'INSUFFICIENT_BALANCE')
     dig 2
     >=
     assert // INSUFFICIENT_BALANCE
-    // smart_contracts/main/contract.algo.ts:844
+    // smart_contracts/main/contract.algo.ts:833
     // recipient: Txn.sender,
     txn Sender
-    // smart_contracts/main/contract.algo.ts:847
+    // smart_contracts/main/contract.algo.ts:836
     // createdAt: Global.latestTimestamp,
     global LatestTimestamp
-    // smart_contracts/main/contract.algo.ts:848
+    // smart_contracts/main/contract.algo.ts:837
     // nonce: cardData.withdrawalNonce,
     uncover 2
     extract 72 8
-    // smart_contracts/main/contract.algo.ts:842-849
+    // smart_contracts/main/contract.algo.ts:831-838
     // const withdrawal: WithdrawalRequest = {
     //   card: card,
     //   recipient: Txn.sender,
@@ -1494,26 +1478,26 @@ withdrawalRequest:
     concat
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:851
+    // smart_contracts/main/contract.algo.ts:840
     // this.withdrawals(Txn.sender).value = clone(withdrawal)
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:851
+    // smart_contracts/main/contract.algo.ts:840
     // this.withdrawals(Txn.sender).value = clone(withdrawal)
     dig 1
     box_put
-    // smart_contracts/main/contract.algo.ts:853
+    // smart_contracts/main/contract.algo.ts:842
     // emit<WithdrawalRequest>(withdrawal)
     pushbytes 0xd85f620a // method "WithdrawalRequest(address,address,uint64,uint64,uint64,uint64)"
     dig 1
     concat
     log
-    // smart_contracts/main/contract.algo.ts:835
+    // smart_contracts/main/contract.algo.ts:824
     // @abimethod({ allowActions: ['NoOp'] })
     bytec_2 // 0x151f7c75
     swap
@@ -1525,7 +1509,7 @@ withdrawalRequest:
 
 // smart_contracts/main/contract.algo.ts::Main.withdrawalCancel[routing]() -> void:
 withdrawalCancel:
-    // smart_contracts/main/contract.algo.ts:862
+    // smart_contracts/main/contract.algo.ts:851
     // public withdrawalCancel(card: Account): void {
     txna ApplicationArgs 1
     dup
@@ -1533,50 +1517,50 @@ withdrawalCancel:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:863
+    // smart_contracts/main/contract.algo.ts:852
     // this.onlyCardOwner(card)
     callsub onlyCardOwner
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:864
+    // smart_contracts/main/contract.algo.ts:853
     // assert(this.withdrawals(Txn.sender).exists, 'WITHDRAWAL_REQUEST_NOT_FOUND')
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:864
+    // smart_contracts/main/contract.algo.ts:853
     // assert(this.withdrawals(Txn.sender).exists, 'WITHDRAWAL_REQUEST_NOT_FOUND')
     box_len
     bury 1
     assert // WITHDRAWAL_REQUEST_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:865
+    // smart_contracts/main/contract.algo.ts:854
     // const withdrawal = clone(this.withdrawals(Txn.sender).value)
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:865
+    // smart_contracts/main/contract.algo.ts:854
     // const withdrawal = clone(this.withdrawals(Txn.sender).value)
     box_get
     assert // Box must have value
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:866
+    // smart_contracts/main/contract.algo.ts:855
     // this.withdrawals(Txn.sender).delete()
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:866
+    // smart_contracts/main/contract.algo.ts:855
     // this.withdrawals(Txn.sender).delete()
     box_del
     pop
-    // smart_contracts/main/contract.algo.ts:867
+    // smart_contracts/main/contract.algo.ts:856
     // emit<WithdrawalRequestCancelled>(withdrawal)
     dup
     extract 0 32
@@ -1601,11 +1585,11 @@ withdrawalCancel:
     concat
     swap
     concat
-    bytec 20 // method "WithdrawalRequestCancelled(address,address,uint64,uint64,uint64,uint64)"
+    bytec 19 // method "WithdrawalRequestCancelled(address,address,uint64,uint64,uint64,uint64)"
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:862
+    // smart_contracts/main/contract.algo.ts:851
     // public withdrawalCancel(card: Account): void {
     intc_1 // 1
     return
@@ -1613,7 +1597,7 @@ withdrawalCancel:
 
 // smart_contracts/main/contract.algo.ts::Main.withdraw[routing]() -> void:
 withdraw:
-    // smart_contracts/main/contract.algo.ts:874
+    // smart_contracts/main/contract.algo.ts:863
     // @abimethod({ allowActions: ['NoOp'] })
     txna ApplicationArgs 1
     dup
@@ -1628,47 +1612,47 @@ withdraw:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/main/contract.algo.ts:876
+    // smart_contracts/main/contract.algo.ts:865
     // this.onlyCardOwner(card)
     dig 1
     callsub onlyCardOwner
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:877
+    // smart_contracts/main/contract.algo.ts:866
     // assert(this.withdrawals(Txn.sender).exists, 'WITHDRAWAL_REQUEST_NOT_FOUND')
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:877
+    // smart_contracts/main/contract.algo.ts:866
     // assert(this.withdrawals(Txn.sender).exists, 'WITHDRAWAL_REQUEST_NOT_FOUND')
     box_len
     bury 1
     assert // WITHDRAWAL_REQUEST_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     dig 2
     concat
-    // smart_contracts/main/contract.algo.ts:878
+    // smart_contracts/main/contract.algo.ts:867
     // const cardData = clone(this.cards(card).value)
     box_get
     assert // Box must have value
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:879
+    // smart_contracts/main/contract.algo.ts:868
     // const withdrawal = clone(this.withdrawals(Txn.sender).value)
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:879
+    // smart_contracts/main/contract.algo.ts:868
     // const withdrawal = clone(this.withdrawals(Txn.sender).value)
     box_get
     assert // Box must have value
-    // smart_contracts/main/contract.algo.ts:880
+    // smart_contracts/main/contract.algo.ts:869
     // assert(amount <= withdrawal.amount, 'AMOUNT_INVALID')
     dup
     pushint 72
@@ -1676,7 +1660,7 @@ withdraw:
     dig 3
     >=
     assert // AMOUNT_INVALID
-    // smart_contracts/main/contract.algo.ts:881
+    // smart_contracts/main/contract.algo.ts:870
     // assert(cardData.withdrawalNonce === withdrawal.nonce, 'NONCE_INVALID')
     swap
     pushint 72
@@ -1688,39 +1672,39 @@ withdraw:
     dig 1
     ==
     assert // NONCE_INVALID
-    // smart_contracts/main/contract.algo.ts:882
+    // smart_contracts/main/contract.algo.ts:871
     // assert(withdrawal.card === card, 'CARD_MISMATCH')
     dig 1
     extract 0 32
     dig 4
     ==
     assert // CARD_MISMATCH
-    // smart_contracts/main/contract.algo.ts:884
+    // smart_contracts/main/contract.algo.ts:873
     // const releaseTime: uint64 = withdrawal.createdAt + this.withdrawal_wait_time.value
     dig 1
     pushint 80
     extract_uint64
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:230
+    // smart_contracts/main/contract.algo.ts:225
     // public withdrawal_wait_time = GlobalState<uint64>({ key: 'wwt' })
-    bytec 14 // "wwt"
-    // smart_contracts/main/contract.algo.ts:884
+    bytec 13 // "wwt"
+    // smart_contracts/main/contract.algo.ts:873
     // const releaseTime: uint64 = withdrawal.createdAt + this.withdrawal_wait_time.value
     app_global_get_ex
     assert // check GlobalState exists
     dig 1
     +
-    // smart_contracts/main/contract.algo.ts:885
+    // smart_contracts/main/contract.algo.ts:874
     // assert(Global.latestTimestamp >= releaseTime, 'WITHDRAWAL_TIME_INVALID')
     global LatestTimestamp
     <=
     assert // WITHDRAWAL_TIME_INVALID
-    // smart_contracts/main/contract.algo.ts:890
+    // smart_contracts/main/contract.algo.ts:879
     // withdrawal.asset,
     uncover 2
     pushint 64
     extract_uint64
-    // smart_contracts/main/contract.algo.ts:888-895
+    // smart_contracts/main/contract.algo.ts:877-884
     // this.withdrawFunds(
     //   card,
     //   withdrawal.asset,
@@ -1734,10 +1718,10 @@ withdraw:
     uncover 4
     uncover 3
     uncover 4
-    // smart_contracts/main/contract.algo.ts:894
+    // smart_contracts/main/contract.algo.ts:883
     // WithdrawalTypePermissionLess,
-    bytec 21 // "permissionless"
-    // smart_contracts/main/contract.algo.ts:888-895
+    bytec 20 // "permissionless"
+    // smart_contracts/main/contract.algo.ts:877-884
     // this.withdrawFunds(
     //   card,
     //   withdrawal.asset,
@@ -1747,20 +1731,20 @@ withdraw:
     //   WithdrawalTypePermissionLess,
     // )
     callsub withdrawFunds
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:896
+    // smart_contracts/main/contract.algo.ts:885
     // this.withdrawals(Txn.sender).delete()
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:896
+    // smart_contracts/main/contract.algo.ts:885
     // this.withdrawals(Txn.sender).delete()
     box_del
     pop
-    // smart_contracts/main/contract.algo.ts:874
+    // smart_contracts/main/contract.algo.ts:863
     // @abimethod({ allowActions: ['NoOp'] })
     intc_1 // 1
     return
@@ -1768,7 +1752,7 @@ withdraw:
 
 // smart_contracts/main/contract.algo.ts::Main.withdrawPermissioned[routing]() -> void:
 withdrawPermissioned:
-    // smart_contracts/main/contract.algo.ts:907-914
+    // smart_contracts/main/contract.algo.ts:896-903
     // public withdrawPermissioned(
     //   card: Account,
     //   asset: Asset,
@@ -1817,26 +1801,26 @@ withdrawPermissioned:
     pushint 64
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 64>
-    // smart_contracts/main/contract.algo.ts:915
+    // smart_contracts/main/contract.algo.ts:904
     // this.onlyCardOwner(card)
     dig 5
     callsub onlyCardOwner
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     dig 6
     concat
-    // smart_contracts/main/contract.algo.ts:916
+    // smart_contracts/main/contract.algo.ts:905
     // const cardData = clone(this.cards(card).value)
     box_get
     assert // Box must have value
-    // smart_contracts/main/contract.algo.ts:918
+    // smart_contracts/main/contract.algo.ts:907
     // assert(Global.latestTimestamp < expiresAt, 'WITHDRAWAL_TIME_INVALID')
     global LatestTimestamp
     dig 4
     <
     assert // WITHDRAWAL_TIME_INVALID
-    // smart_contracts/main/contract.algo.ts:919
+    // smart_contracts/main/contract.algo.ts:908
     // assert(cardData.withdrawalNonce === nonce, 'NONCE_INVALID')
     pushint 72
     extract_uint64
@@ -1844,13 +1828,13 @@ withdrawPermissioned:
     dig 3
     ==
     assert // NONCE_INVALID
-    // smart_contracts/main/contract.algo.ts:923
+    // smart_contracts/main/contract.algo.ts:912
     // recipient: Txn.sender,
     txn Sender
-    // smart_contracts/main/contract.algo.ts:928
+    // smart_contracts/main/contract.algo.ts:917
     // genesisHash: Global.genesisHash,
     global GenesisHash
-    // smart_contracts/main/contract.algo.ts:921-929
+    // smart_contracts/main/contract.algo.ts:910-918
     // const withdrawal: PermissionedWithdrawal = {
     //   card,
     //   recipient: Txn.sender,
@@ -1877,21 +1861,21 @@ withdrawPermissioned:
     concat
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:931
+    // smart_contracts/main/contract.algo.ts:920
     // const withdrawal_hash = op.sha256(arc4.encodeArc4(withdrawal))
     sha256
-    // smart_contracts/main/contract.algo.ts:934
+    // smart_contracts/main/contract.algo.ts:923
     // ensureBudget(2500)
     pushint 2500
     intc_0 // 0
     callsub ensure_budget
-    // smart_contracts/main/contract.algo.ts:936
+    // smart_contracts/main/contract.algo.ts:925
     // assert(op.ed25519verifyBare(withdrawal_hash, signature, this.withdrawal_pubkey.value), 'SIGNATURE_INVALID')
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:233
+    // smart_contracts/main/contract.algo.ts:228
     // public withdrawal_pubkey = GlobalState<bytes<32>>({ key: 'pwpk' })
-    bytec 15 // "pwpk"
-    // smart_contracts/main/contract.algo.ts:936
+    bytec 14 // "pwpk"
+    // smart_contracts/main/contract.algo.ts:925
     // assert(op.ed25519verifyBare(withdrawal_hash, signature, this.withdrawal_pubkey.value), 'SIGNATURE_INVALID')
     app_global_get_ex
     assert // check GlobalState exists
@@ -1900,40 +1884,40 @@ withdrawPermissioned:
     uncover 2
     ed25519verify_bare
     assert // SIGNATURE_INVALID
-    // smart_contracts/main/contract.algo.ts:939
+    // smart_contracts/main/contract.algo.ts:928
     // this.withdrawFunds(card, asset, amount, expiresAt, cardData.withdrawalNonce, WithdrawalTypeApproved)
-    bytec 22 // "approved"
+    bytec 21 // "approved"
     callsub withdrawFunds
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:944
+    // smart_contracts/main/contract.algo.ts:933
     // if (this.withdrawals(Txn.sender).exists) {
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:944
+    // smart_contracts/main/contract.algo.ts:933
     // if (this.withdrawals(Txn.sender).exists) {
     box_len
     bury 1
     bz withdrawPermissioned_after_if_else@3
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
-    // smart_contracts/main/contract.algo.ts:945
+    // smart_contracts/main/contract.algo.ts:934
     // this.withdrawals(Txn.sender).delete()
     txn Sender
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     concat
-    // smart_contracts/main/contract.algo.ts:945
+    // smart_contracts/main/contract.algo.ts:934
     // this.withdrawals(Txn.sender).delete()
     box_del
     pop
 
 withdrawPermissioned_after_if_else@3:
-    // smart_contracts/main/contract.algo.ts:907-914
+    // smart_contracts/main/contract.algo.ts:896-903
     // public withdrawPermissioned(
     //   card: Account,
     //   asset: Asset,
@@ -1946,53 +1930,9 @@ withdrawPermissioned_after_if_else@3:
     return
 
 
-// smart_contracts/main/contract.algo.ts::Main.pauseRefund[routing]() -> void:
-pauseRefund:
-    // smart_contracts/main/contract.algo.ts:957
-    // this.onlyOwner()
-    callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:267
-    // public refund_paused = GlobalState<boolean>({ key: 'rpa' })
-    bytec 8 // "rpa"
-    // smart_contracts/main/contract.algo.ts:959
-    // this.refund_paused.value = true
-    intc_1 // 1
-    app_global_put
-    // smart_contracts/main/contract.algo.ts:960
-    // emit<RefundPause>({})
-    pushbytes 0xb18b611e
-    log
-    // smart_contracts/main/contract.algo.ts:956
-    // public pauseRefund(): void {
-    intc_1 // 1
-    return
-
-
-// smart_contracts/main/contract.algo.ts::Main.unpauseRefund[routing]() -> void:
-unpauseRefund:
-    // smart_contracts/main/contract.algo.ts:968
-    // this.onlyOwner()
-    callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:267
-    // public refund_paused = GlobalState<boolean>({ key: 'rpa' })
-    bytec 8 // "rpa"
-    // smart_contracts/main/contract.algo.ts:970
-    // this.refund_paused.value = false
-    intc_0 // 0
-    app_global_put
-    // smart_contracts/main/contract.algo.ts:971
-    // emit<RefundUnpause>({})
-    pushbytes 0xd53502e6
-    log
-    // smart_contracts/main/contract.algo.ts:967
-    // public unpauseRefund(): void {
-    intc_1 // 1
-    return
-
-
 // smart_contracts/main/contract.algo.ts::Main.setRefundSignerPubkey[routing]() -> void:
 setRefundSignerPubkey:
-    // smart_contracts/main/contract.algo.ts:981
+    // smart_contracts/main/contract.algo.ts:947
     // public setRefundSignerPubkey(pubkey: bytes<32>): void {
     txna ApplicationArgs 1
     dup
@@ -2000,17 +1940,17 @@ setRefundSignerPubkey:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:982
+    // smart_contracts/main/contract.algo.ts:948
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:262
+    // smart_contracts/main/contract.algo.ts:257
     // public refund_pubkey = GlobalState<bytes<32>>({ key: 'rpk' })
-    bytec 23 // "rpk"
-    // smart_contracts/main/contract.algo.ts:984
+    bytec 22 // "rpk"
+    // smart_contracts/main/contract.algo.ts:950
     // this.refund_pubkey.value = pubkey
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:981
+    // smart_contracts/main/contract.algo.ts:947
     // public setRefundSignerPubkey(pubkey: bytes<32>): void {
     intc_1 // 1
     return
@@ -2018,7 +1958,7 @@ setRefundSignerPubkey:
 
 // smart_contracts/main/contract.algo.ts::Main.addRefundOperator[routing]() -> void:
 addRefundOperator:
-    // smart_contracts/main/contract.algo.ts:993
+    // smart_contracts/main/contract.algo.ts:959
     // public addRefundOperator(operator: Account): void {
     txna ApplicationArgs 1
     dup
@@ -2026,20 +1966,20 @@ addRefundOperator:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:994
+    // smart_contracts/main/contract.algo.ts:960
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:259
+    // smart_contracts/main/contract.algo.ts:254
     // public refund_operators = BoxMap<Account, uint64>({ keyPrefix: 'rop' })
-    bytec 12 // "rop"
+    bytec 11 // "rop"
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:996
+    // smart_contracts/main/contract.algo.ts:962
     // this.refund_operators(operator).value = 1
     intc_1 // 1
     itob
     box_put
-    // smart_contracts/main/contract.algo.ts:993
+    // smart_contracts/main/contract.algo.ts:959
     // public addRefundOperator(operator: Account): void {
     intc_1 // 1
     return
@@ -2047,7 +1987,7 @@ addRefundOperator:
 
 // smart_contracts/main/contract.algo.ts::Main.removeRefundOperator[routing]() -> void:
 removeRefundOperator:
-    // smart_contracts/main/contract.algo.ts:1005
+    // smart_contracts/main/contract.algo.ts:971
     // public removeRefundOperator(operator: Account): void {
     txna ApplicationArgs 1
     dup
@@ -2055,19 +1995,19 @@ removeRefundOperator:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:1006
+    // smart_contracts/main/contract.algo.ts:972
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:259
+    // smart_contracts/main/contract.algo.ts:254
     // public refund_operators = BoxMap<Account, uint64>({ keyPrefix: 'rop' })
-    bytec 12 // "rop"
+    bytec 11 // "rop"
     swap
     concat
-    // smart_contracts/main/contract.algo.ts:1008
+    // smart_contracts/main/contract.algo.ts:974
     // this.refund_operators(operator).delete()
     box_del
     pop
-    // smart_contracts/main/contract.algo.ts:1005
+    // smart_contracts/main/contract.algo.ts:971
     // public removeRefundOperator(operator: Account): void {
     intc_1 // 1
     return
@@ -2075,20 +2015,20 @@ removeRefundOperator:
 
 // smart_contracts/main/contract.algo.ts::Main.getNextTreasuryNonce[routing]() -> void:
 getNextTreasuryNonce:
-    // smart_contracts/main/contract.algo.ts:1019
+    // smart_contracts/main/contract.algo.ts:985
     // assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1019
+    // smart_contracts/main/contract.algo.ts:985
     // assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     app_global_get_ex
     assert // TREASURY_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:1020
+    // smart_contracts/main/contract.algo.ts:986
     // return this.treasury.value.nonce
     extract 32 8
-    // smart_contracts/main/contract.algo.ts:1017
+    // smart_contracts/main/contract.algo.ts:983
     // @abimethod({ readonly: true })
     bytec_2 // 0x151f7c75
     swap
@@ -2102,7 +2042,7 @@ getNextTreasuryNonce:
 treasuryAssetOptIn:
     pushbytes ""
     dup
-    // smart_contracts/main/contract.algo.ts:1033
+    // smart_contracts/main/contract.algo.ts:999
     // public treasuryAssetOptIn(asset: Asset): Account {
     txna ApplicationArgs 1
     dup
@@ -2111,44 +2051,44 @@ treasuryAssetOptIn:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // smart_contracts/main/contract.algo.ts:1034
+    // smart_contracts/main/contract.algo.ts:1000
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:1043
+    // smart_contracts/main/contract.algo.ts:1009
     // if (!this.treasury.hasValue) {
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1043
+    // smart_contracts/main/contract.algo.ts:1009
     // if (!this.treasury.hasValue) {
     app_global_get_ex
     bury 1
     bnz treasuryAssetOptIn_after_if_else@4
-    // smart_contracts/main/contract.algo.ts:1046-1050
+    // smart_contracts/main/contract.algo.ts:1012-1016
     // address: arc4.abiCall<typeof ControlledAddress.prototype.new>({
     //   approvalProgram: controlledAddr.approvalProgram,
     //   clearStateProgram: controlledAddr.clearStateProgram,
     //   onCompletion: OnCompleteAction.DeleteApplication,
     // }).returnValue,
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:1049
+    // smart_contracts/main/contract.algo.ts:1015
     // onCompletion: OnCompleteAction.DeleteApplication,
     pushint 5
     itxn_field OnCompletion
-    // smart_contracts/main/contract.algo.ts:1044
+    // smart_contracts/main/contract.algo.ts:1010
     // const controlledAddr = compile(ControlledAddress)
-    bytec 16 // base64(C4EBQw==)
+    bytec 15 // base64(C4EBQw==)
     itxn_field ClearStateProgramPages
-    bytec 17 // base64(CyACAAGABFYdL+o2GgCOAQABADEZgQUSMRgUEERCAACxMgoyDrIgIrIIsgcjshAisgGzgAQVH3x1MgpQsCND)
+    bytec 16 // base64(CyACAAGABFYdL+o2GgCOAQABADEZgQUSMRgUEERCAACxMgoyDrIgIrIIsgcjshAisgGzgAQVH3x1MgpQsCND)
     itxn_field ApprovalProgramPages
-    // smart_contracts/main/contract.algo.ts:1046-1050
+    // smart_contracts/main/contract.algo.ts:1012-1016
     // address: arc4.abiCall<typeof ControlledAddress.prototype.new>({
     //   approvalProgram: controlledAddr.approvalProgram,
     //   clearStateProgram: controlledAddr.clearStateProgram,
     //   onCompletion: OnCompleteAction.DeleteApplication,
     // }).returnValue,
-    bytec 18 // method "new()address"
+    bytec 17 // method "new()address"
     itxn_field ApplicationArgs
     pushint 6 // appl
     itxn_field TypeEnum
@@ -2168,10 +2108,10 @@ treasuryAssetOptIn:
     intc_2 // 32
     ==
     assert // invalid number of bytes for account
-    // smart_contracts/main/contract.algo.ts:1051
+    // smart_contracts/main/contract.algo.ts:1017
     // nonce: 0,
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:1045-1052
+    // smart_contracts/main/contract.algo.ts:1011-1018
     // this.treasury.value = {
     //   address: arc4.abiCall<typeof ControlledAddress.prototype.new>({
     //     approvalProgram: controlledAddr.approvalProgram,
@@ -2182,10 +2122,10 @@ treasuryAssetOptIn:
     // }
     itob
     concat
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1045-1052
+    // smart_contracts/main/contract.algo.ts:1011-1018
     // this.treasury.value = {
     //   address: arc4.abiCall<typeof ControlledAddress.prototype.new>({
     //     approvalProgram: controlledAddr.approvalProgram,
@@ -2198,39 +2138,39 @@ treasuryAssetOptIn:
     app_global_put
 
 treasuryAssetOptIn_after_if_else@4:
-    // smart_contracts/main/contract.algo.ts:1055
+    // smart_contracts/main/contract.algo.ts:1021
     // const treasuryAddress = this.treasury.value.address
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1055
+    // smart_contracts/main/contract.algo.ts:1021
     // const treasuryAddress = this.treasury.value.address
     app_global_get_ex
     assert // check GlobalState exists
     extract 0 32
     dup
     cover 2
-    // smart_contracts/main/contract.algo.ts:1057
+    // smart_contracts/main/contract.algo.ts:1023
     // const [, alreadyOptedIn] = op.AssetHolding.assetBalance(treasuryAddress, asset)
     dup
     dig 2
     asset_holding_get AssetBalance
     bury 1
-    // smart_contracts/main/contract.algo.ts:1058
+    // smart_contracts/main/contract.algo.ts:1024
     // assert(!alreadyOptedIn, 'ASSET_ALREADY_ENABLED')
     !
     assert // ASSET_ALREADY_ENABLED
-    // smart_contracts/main/contract.algo.ts:1064
+    // smart_contracts/main/contract.algo.ts:1030
     // const [balance] = op.AcctParams.acctBalance(treasuryAddress)
     dup
     acct_params_get AcctBalance
     pop
     bury 5
-    // smart_contracts/main/contract.algo.ts:1065
+    // smart_contracts/main/contract.algo.ts:1031
     // const [minBalance, funded] = op.AcctParams.acctMinBalance(treasuryAddress)
     acct_params_get AcctMinBalance
-    // smart_contracts/main/contract.algo.ts:1066
+    // smart_contracts/main/contract.algo.ts:1032
     // const base: uint64 = funded && minBalance > Global.minBalance ? minBalance : Global.minBalance
     bz treasuryAssetOptIn_ternary_false@7
     dup
@@ -2239,18 +2179,18 @@ treasuryAssetOptIn_after_if_else@4:
     bz treasuryAssetOptIn_ternary_false@7
 
 treasuryAssetOptIn_ternary_merge@8:
-    // smart_contracts/main/contract.algo.ts:1067
+    // smart_contracts/main/contract.algo.ts:1033
     // const required: uint64 = base + Global.assetOptInMinBalance
     global AssetOptInMinBalance
     +
     dup
     bury 4
-    // smart_contracts/main/contract.algo.ts:1068
+    // smart_contracts/main/contract.algo.ts:1034
     // if (balance < required) {
     dig 4
     >
     bz treasuryAssetOptIn_after_if_else@11
-    // smart_contracts/main/contract.algo.ts:1069-1074
+    // smart_contracts/main/contract.algo.ts:1035-1040
     // itxn
     //   .payment({
     //     receiver: treasuryAddress,
@@ -2258,7 +2198,7 @@ treasuryAssetOptIn_ternary_merge@8:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:1072
+    // smart_contracts/main/contract.algo.ts:1038
     // amount: required - balance,
     dig 2
     dig 4
@@ -2266,7 +2206,7 @@ treasuryAssetOptIn_ternary_merge@8:
     itxn_field Amount
     dig 1
     itxn_field Receiver
-    // smart_contracts/main/contract.algo.ts:1069-1073
+    // smart_contracts/main/contract.algo.ts:1035-1039
     // itxn
     //   .payment({
     //     receiver: treasuryAddress,
@@ -2276,7 +2216,7 @@ treasuryAssetOptIn_ternary_merge@8:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:1069-1074
+    // smart_contracts/main/contract.algo.ts:1035-1040
     // itxn
     //   .payment({
     //     receiver: treasuryAddress,
@@ -2286,7 +2226,7 @@ treasuryAssetOptIn_ternary_merge@8:
     itxn_submit
 
 treasuryAssetOptIn_after_if_else@11:
-    // smart_contracts/main/contract.algo.ts:1077-1084
+    // smart_contracts/main/contract.algo.ts:1043-1050
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2296,7 +2236,7 @@ treasuryAssetOptIn_after_if_else@11:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:1082
+    // smart_contracts/main/contract.algo.ts:1048
     // assetAmount: 0,
     intc_0 // 0
     itxn_field AssetAmount
@@ -2307,7 +2247,7 @@ treasuryAssetOptIn_after_if_else@11:
     itxn_field AssetReceiver
     dup
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:1077-1083
+    // smart_contracts/main/contract.algo.ts:1043-1049
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2319,7 +2259,7 @@ treasuryAssetOptIn_after_if_else@11:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:1077-1084
+    // smart_contracts/main/contract.algo.ts:1043-1050
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2329,7 +2269,7 @@ treasuryAssetOptIn_after_if_else@11:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:1086-1089
+    // smart_contracts/main/contract.algo.ts:1052-1055
     // emit<TreasuryAssetEnabled>({
     //   treasury: treasuryAddress,
     //   asset: asset,
@@ -2343,7 +2283,7 @@ treasuryAssetOptIn_after_if_else@11:
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:1033
+    // smart_contracts/main/contract.algo.ts:999
     // public treasuryAssetOptIn(asset: Asset): Account {
     bytec_2 // 0x151f7c75
     swap
@@ -2354,7 +2294,7 @@ treasuryAssetOptIn_after_if_else@11:
 
 treasuryAssetOptIn_ternary_false@7:
     pop
-    // smart_contracts/main/contract.algo.ts:1066
+    // smart_contracts/main/contract.algo.ts:1032
     // const base: uint64 = funded && minBalance > Global.minBalance ? minBalance : Global.minBalance
     global MinBalance
     b treasuryAssetOptIn_ternary_merge@8
@@ -2362,7 +2302,7 @@ treasuryAssetOptIn_ternary_false@7:
 
 // smart_contracts/main/contract.algo.ts::Main.treasuryAssetCloseOut[routing]() -> void:
 treasuryAssetCloseOut:
-    // smart_contracts/main/contract.algo.ts:1107
+    // smart_contracts/main/contract.algo.ts:1073
     // public treasuryAssetCloseOut(asset: Asset, closeTo: Account): void {
     txna ApplicationArgs 1
     dup
@@ -2378,25 +2318,25 @@ treasuryAssetCloseOut:
     intc_2 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/main/contract.algo.ts:1108
+    // smart_contracts/main/contract.algo.ts:1074
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:1109
+    // smart_contracts/main/contract.algo.ts:1075
     // assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1109
+    // smart_contracts/main/contract.algo.ts:1075
     // assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     app_global_get_ex
     assert // TREASURY_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:1110
+    // smart_contracts/main/contract.algo.ts:1076
     // const treasuryAddress = this.treasury.value.address
     extract 0 32
     dup
     cover 3
-    // smart_contracts/main/contract.algo.ts:1112-1120
+    // smart_contracts/main/contract.algo.ts:1078-1086
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2407,7 +2347,7 @@ treasuryAssetCloseOut:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:1118
+    // smart_contracts/main/contract.algo.ts:1084
     // assetAmount: 0,
     intc_0 // 0
     itxn_field AssetAmount
@@ -2419,7 +2359,7 @@ treasuryAssetCloseOut:
     itxn_field AssetReceiver
     dup
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:1112-1119
+    // smart_contracts/main/contract.algo.ts:1078-1085
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2432,7 +2372,7 @@ treasuryAssetCloseOut:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:1112-1120
+    // smart_contracts/main/contract.algo.ts:1078-1086
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2443,7 +2383,7 @@ treasuryAssetCloseOut:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:1122
+    // smart_contracts/main/contract.algo.ts:1088
     // if (treasuryAddress.balance > treasuryAddress.minBalance) {
     dup
     acct_params_get AcctBalance
@@ -2453,7 +2393,7 @@ treasuryAssetCloseOut:
     assert // account funded
     >
     bz treasuryAssetCloseOut_after_if_else@5
-    // smart_contracts/main/contract.algo.ts:1123-1129
+    // smart_contracts/main/contract.algo.ts:1089-1095
     // itxn
     //   .payment({
     //     sender: treasuryAddress,
@@ -2462,10 +2402,10 @@ treasuryAssetCloseOut:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:1126
+    // smart_contracts/main/contract.algo.ts:1092
     // receiver: Global.currentApplicationAddress,
     global CurrentApplicationAddress
-    // smart_contracts/main/contract.algo.ts:1127
+    // smart_contracts/main/contract.algo.ts:1093
     // amount: treasuryAddress.balance - treasuryAddress.minBalance,
     dig 1
     dup
@@ -2478,7 +2418,7 @@ treasuryAssetCloseOut:
     itxn_field Amount
     itxn_field Sender
     itxn_field Receiver
-    // smart_contracts/main/contract.algo.ts:1123-1128
+    // smart_contracts/main/contract.algo.ts:1089-1094
     // itxn
     //   .payment({
     //     sender: treasuryAddress,
@@ -2489,7 +2429,7 @@ treasuryAssetCloseOut:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:1123-1129
+    // smart_contracts/main/contract.algo.ts:1089-1095
     // itxn
     //   .payment({
     //     sender: treasuryAddress,
@@ -2500,7 +2440,7 @@ treasuryAssetCloseOut:
     itxn_submit
 
 treasuryAssetCloseOut_after_if_else@5:
-    // smart_contracts/main/contract.algo.ts:1132-1135
+    // smart_contracts/main/contract.algo.ts:1098-1101
     // emit<TreasuryAssetDisabled>({
     //   treasury: treasuryAddress,
     //   asset: asset,
@@ -2512,7 +2452,7 @@ treasuryAssetCloseOut_after_if_else@5:
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:1107
+    // smart_contracts/main/contract.algo.ts:1073
     // public treasuryAssetCloseOut(asset: Asset, closeTo: Account): void {
     intc_1 // 1
     return
@@ -2520,20 +2460,20 @@ treasuryAssetCloseOut_after_if_else@5:
 
 // smart_contracts/main/contract.algo.ts::Main.treasuryClose[routing]() -> void:
 treasuryClose:
-    // smart_contracts/main/contract.algo.ts:1151
+    // smart_contracts/main/contract.algo.ts:1117
     // this.onlyOwner()
     callsub onlyOwner
-    // smart_contracts/main/contract.algo.ts:1152
+    // smart_contracts/main/contract.algo.ts:1118
     // assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1152
+    // smart_contracts/main/contract.algo.ts:1118
     // assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     app_global_get_ex
     assert // TREASURY_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:1154-1161
+    // smart_contracts/main/contract.algo.ts:1120-1127
     // itxn
     //   .payment({
     //     sender: this.treasury.value.address,
@@ -2543,23 +2483,23 @@ treasuryClose:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:1156
+    // smart_contracts/main/contract.algo.ts:1122
     // sender: this.treasury.value.address,
     extract 0 32
-    // smart_contracts/main/contract.algo.ts:1157
+    // smart_contracts/main/contract.algo.ts:1123
     // receiver: Global.currentApplicationAddress,
     global CurrentApplicationAddress
-    // smart_contracts/main/contract.algo.ts:1159
+    // smart_contracts/main/contract.algo.ts:1125
     // closeRemainderTo: Global.currentApplicationAddress,
     dup
     itxn_field CloseRemainderTo
-    // smart_contracts/main/contract.algo.ts:1158
+    // smart_contracts/main/contract.algo.ts:1124
     // amount: 0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:1154-1160
+    // smart_contracts/main/contract.algo.ts:1120-1126
     // itxn
     //   .payment({
     //     sender: this.treasury.value.address,
@@ -2571,7 +2511,7 @@ treasuryClose:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:1154-1161
+    // smart_contracts/main/contract.algo.ts:1120-1127
     // itxn
     //   .payment({
     //     sender: this.treasury.value.address,
@@ -2581,13 +2521,13 @@ treasuryClose:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1163
+    // smart_contracts/main/contract.algo.ts:1129
     // this.treasury.delete()
     app_global_del
-    // smart_contracts/main/contract.algo.ts:1150
+    // smart_contracts/main/contract.algo.ts:1116
     // public treasuryClose(): void {
     intc_1 // 1
     return
@@ -2596,7 +2536,7 @@ treasuryClose:
 // smart_contracts/main/contract.algo.ts::Main.cardRefund[routing]() -> void:
 cardRefund:
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:1190-1196
+    // smart_contracts/main/contract.algo.ts:1156-1162
     // public cardRefund(
     //   transfers: RefundTransfer[],
     //   asset: Asset,
@@ -2648,76 +2588,67 @@ cardRefund:
     pushint 64
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 64>
-    // smart_contracts/main/contract.algo.ts:1197
-    // assert(!this.refund_paused.value, 'REFUND_PAUSED')
-    intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:267
-    // public refund_paused = GlobalState<boolean>({ key: 'rpa' })
-    bytec 8 // "rpa"
-    // smart_contracts/main/contract.algo.ts:1197
-    // assert(!this.refund_paused.value, 'REFUND_PAUSED')
-    app_global_get_ex
-    assert // check GlobalState exists
-    !
-    assert // REFUND_PAUSED
-    // smart_contracts/main/contract.algo.ts:259
+    // smart_contracts/main/contract.algo.ts:1163
+    // this.whenNotPaused()
+    callsub whenNotPaused
+    // smart_contracts/main/contract.algo.ts:254
     // public refund_operators = BoxMap<Account, uint64>({ keyPrefix: 'rop' })
-    bytec 12 // "rop"
-    // smart_contracts/main/contract.algo.ts:1198
+    bytec 11 // "rop"
+    // smart_contracts/main/contract.algo.ts:1164
     // assert(this.refund_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
     txn Sender
-    // smart_contracts/main/contract.algo.ts:259
+    // smart_contracts/main/contract.algo.ts:254
     // public refund_operators = BoxMap<Account, uint64>({ keyPrefix: 'rop' })
     concat
-    // smart_contracts/main/contract.algo.ts:1198
+    // smart_contracts/main/contract.algo.ts:1164
     // assert(this.refund_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
     box_len
     bury 1
     assert // SENDER_NOT_ALLOWED
-    // smart_contracts/main/contract.algo.ts:1199
+    // smart_contracts/main/contract.algo.ts:1165
     // assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1199
+    // smart_contracts/main/contract.algo.ts:1165
     // assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     app_global_get_ex
     assert // TREASURY_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:1200
+    // smart_contracts/main/contract.algo.ts:1166
     // const treasuryAddress = this.treasury.value.address
     dup
     extract 0 32
     dup
     cover 2
     cover 9
-    // smart_contracts/main/contract.algo.ts:1203
+    // smart_contracts/main/contract.algo.ts:1169
     // assert(count > 0, 'NO_TRANSFERS')
     dig 6
     assert // NO_TRANSFERS
-    // smart_contracts/main/contract.algo.ts:1204
+    // smart_contracts/main/contract.algo.ts:1170
     // assert(count <= MaxRefundTransfers, 'TOO_MANY_TRANSFERS')
     uncover 6
     pushint 16
     <=
     assert // TOO_MANY_TRANSFERS
-    // smart_contracts/main/contract.algo.ts:1205
+    // smart_contracts/main/contract.algo.ts:1171
     // assert(Global.latestTimestamp < expiresAt, 'REFUND_TIME_INVALID')
     global LatestTimestamp
     dig 5
     <
     assert // REFUND_TIME_INVALID
-    // smart_contracts/main/contract.algo.ts:1206
+    // smart_contracts/main/contract.algo.ts:1172
     // assert(this.treasury.value.nonce === nonce, 'NONCE_INVALID')
     intc_2 // 32
     extract_uint64
     dig 3
     ==
     assert // NONCE_INVALID
-    // smart_contracts/main/contract.algo.ts:1215
+    // smart_contracts/main/contract.algo.ts:1181
     // genesisHash: Global.genesisHash,
     global GenesisHash
-    // smart_contracts/main/contract.algo.ts:1210-1217
+    // smart_contracts/main/contract.algo.ts:1176-1183
     // const refund: RefundBatch = {
     //   treasury: treasuryAddress,
     //   asset,
@@ -2749,21 +2680,21 @@ cardRefund:
     concat
     uncover 3
     concat
-    // smart_contracts/main/contract.algo.ts:1220
+    // smart_contracts/main/contract.algo.ts:1186
     // ensureBudget(2500)
     pushint 2500
     intc_0 // 0
     callsub ensure_budget
-    // smart_contracts/main/contract.algo.ts:1222
+    // smart_contracts/main/contract.algo.ts:1188
     // const refund_hash = op.sha256(arc4.encodeArc4(refund))
     sha256
-    // smart_contracts/main/contract.algo.ts:1224
+    // smart_contracts/main/contract.algo.ts:1190
     // assert(op.ed25519verifyBare(refund_hash, signature, this.refund_pubkey.value), 'SIGNATURE_INVALID')
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:262
+    // smart_contracts/main/contract.algo.ts:257
     // public refund_pubkey = GlobalState<bytes<32>>({ key: 'rpk' })
-    bytec 23 // "rpk"
-    // smart_contracts/main/contract.algo.ts:1224
+    bytec 22 // "rpk"
+    // smart_contracts/main/contract.algo.ts:1190
     // assert(op.ed25519verifyBare(refund_hash, signature, this.refund_pubkey.value), 'SIGNATURE_INVALID')
     app_global_get_ex
     assert // check GlobalState exists
@@ -2771,43 +2702,43 @@ cardRefund:
     cover 2
     ed25519verify_bare
     assert // SIGNATURE_INVALID
-    // smart_contracts/main/contract.algo.ts:1227
+    // smart_contracts/main/contract.algo.ts:1193
     // this.treasury.value.nonce = nonce + 1
     intc_1 // 1
     +
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1227
+    // smart_contracts/main/contract.algo.ts:1193
     // this.treasury.value.nonce = nonce + 1
     app_global_get_ex
     assert // check GlobalState exists
     swap
     itob
     replace2 32
-    // smart_contracts/main/contract.algo.ts:255
+    // smart_contracts/main/contract.algo.ts:250
     // public treasury = GlobalState<Treasury>({ key: 't' })
     bytec_1 // "t"
-    // smart_contracts/main/contract.algo.ts:1227
+    // smart_contracts/main/contract.algo.ts:1193
     // this.treasury.value.nonce = nonce + 1
     swap
     app_global_put
-    // smart_contracts/main/contract.algo.ts:1232
+    // smart_contracts/main/contract.algo.ts:1198
     // let total: uint64 = 0
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:1233
+    // smart_contracts/main/contract.algo.ts:1199
     // for (let i: uint64 = 0; i < count; i = i + 1) {
     dup
 
 cardRefund_while_top@2:
-    // smart_contracts/main/contract.algo.ts:1233
+    // smart_contracts/main/contract.algo.ts:1199
     // for (let i: uint64 = 0; i < count; i = i + 1) {
     dup
     dig 4
     <
     bz cardRefund_after_while@7
-    // smart_contracts/main/contract.algo.ts:1234
+    // smart_contracts/main/contract.algo.ts:1200
     // const amount = transfers[i].amount
     dig 8
     extract 2 0
@@ -2821,10 +2752,10 @@ cardRefund_while_top@2:
     intc_2 // 32
     extract_uint64
     dup
-    // smart_contracts/main/contract.algo.ts:1237
+    // smart_contracts/main/contract.algo.ts:1203
     // if (amount > 0) {
     bz cardRefund_after_if_else@6
-    // smart_contracts/main/contract.algo.ts:1238-1245
+    // smart_contracts/main/contract.algo.ts:1204-1211
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2834,7 +2765,7 @@ cardRefund_while_top@2:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:1241
+    // smart_contracts/main/contract.algo.ts:1207
     // assetReceiver: transfers[i].recipient,
     dig 10
     extract 0 32
@@ -2845,7 +2776,7 @@ cardRefund_while_top@2:
     itxn_field AssetReceiver
     dig 7
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:1238-1244
+    // smart_contracts/main/contract.algo.ts:1204-1210
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2857,7 +2788,7 @@ cardRefund_while_top@2:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:1238-1245
+    // smart_contracts/main/contract.algo.ts:1204-1211
     // itxn
     //   .assetTransfer({
     //     sender: treasuryAddress,
@@ -2869,12 +2800,12 @@ cardRefund_while_top@2:
     itxn_submit
 
 cardRefund_after_if_else@6:
-    // smart_contracts/main/contract.algo.ts:1248
+    // smart_contracts/main/contract.algo.ts:1214
     // total = total + amount
     uncover 2
     +
     swap
-    // smart_contracts/main/contract.algo.ts:1233
+    // smart_contracts/main/contract.algo.ts:1199
     // for (let i: uint64 = 0; i < count; i = i + 1) {
     intc_1 // 1
     +
@@ -2882,7 +2813,7 @@ cardRefund_after_if_else@6:
 
 cardRefund_after_while@7:
     pop
-    // smart_contracts/main/contract.algo.ts:1251-1258
+    // smart_contracts/main/contract.algo.ts:1217-1224
     // emit<Refund>({
     //   treasury: treasuryAddress,
     //   asset: asset,
@@ -2907,7 +2838,7 @@ cardRefund_after_while@7:
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:1190-1196
+    // smart_contracts/main/contract.algo.ts:1156-1162
     // public cardRefund(
     //   transfers: RefundTransfer[],
     //   asset: Asset,
@@ -3174,28 +3105,28 @@ recoverAsset_else_body@4:
 
 // smart_contracts/main/contract.algo.ts::Main.onlyCardOwner(card: bytes) -> void:
 onlyCardOwner:
-    // smart_contracts/main/contract.algo.ts:284
+    // smart_contracts/main/contract.algo.ts:274
     // private onlyCardOwner(card: Account): void {
     proto 1 0
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     frame_dig -1
     concat
-    // smart_contracts/main/contract.algo.ts:276
+    // smart_contracts/main/contract.algo.ts:266
     // assert(this.cards(card).exists, 'CARD_NOT_FOUND')
     dup
     box_len
     bury 1
     assert // CARD_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:277
+    // smart_contracts/main/contract.algo.ts:267
     // return this.cards(card).value.owner === Txn.sender
     box_get
     pop
     extract 0 32
     txn Sender
     ==
-    // smart_contracts/main/contract.algo.ts:285
+    // smart_contracts/main/contract.algo.ts:275
     // assert(this.isCardOwner(card), 'SENDER_NOT_ALLOWED')
     assert // SENDER_NOT_ALLOWED
     retsub
@@ -3203,14 +3134,14 @@ onlyCardOwner:
 
 // smart_contracts/main/contract.algo.ts::Main.isPartner() -> uint64:
 isPartner:
-    // smart_contracts/main/contract.algo.ts:293
+    // smart_contracts/main/contract.algo.ts:283
     // return Txn.sender === this.partner_address.value
     txn Sender
     intc_0 // 0
-    // smart_contracts/main/contract.algo.ts:240
+    // smart_contracts/main/contract.algo.ts:235
     // public partner_address = GlobalState<Account>({ key: 'pa' })
-    bytec 19 // "pa"
-    // smart_contracts/main/contract.algo.ts:293
+    bytec 18 // "pa"
+    // smart_contracts/main/contract.algo.ts:283
     // return Txn.sender === this.partner_address.value
     app_global_get_ex
     assert // check GlobalState exists
@@ -3220,34 +3151,34 @@ isPartner:
 
 // smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn(card: bytes, asset: uint64) -> void:
 smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn:
-    // smart_contracts/main/contract.algo.ts:318
+    // smart_contracts/main/contract.algo.ts:308
     // public cardAssetOptIn(card: Account, asset: Asset): void {
     proto 2 0
-    // smart_contracts/main/contract.algo.ts:300
+    // smart_contracts/main/contract.algo.ts:290
     // assert(this.isPartner(), 'SENDER_NOT_ALLOWED')
     callsub isPartner
     assert // SENDER_NOT_ALLOWED
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     frame_dig -2
     concat
-    // smart_contracts/main/contract.algo.ts:320
+    // smart_contracts/main/contract.algo.ts:310
     // assert(this.cards(card).exists, 'CARD_NOT_FOUND')
     box_len
     bury 1
     assert // CARD_NOT_FOUND
-    // smart_contracts/main/contract.algo.ts:324
+    // smart_contracts/main/contract.algo.ts:314
     // const [, alreadyOptedIn] = op.AssetHolding.assetBalance(card, asset)
     frame_dig -2
     frame_dig -1
     asset_holding_get AssetBalance
     bury 1
-    // smart_contracts/main/contract.algo.ts:325
+    // smart_contracts/main/contract.algo.ts:315
     // assert(!alreadyOptedIn, 'ASSET_ALREADY_ENABLED')
     !
     assert // ASSET_ALREADY_ENABLED
-    // smart_contracts/main/contract.algo.ts:329
+    // smart_contracts/main/contract.algo.ts:319
     // const required: uint64 = card.minBalance + Global.assetOptInMinBalance
     frame_dig -2
     acct_params_get AcctMinBalance
@@ -3255,14 +3186,14 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn:
     global AssetOptInMinBalance
     +
     dup
-    // smart_contracts/main/contract.algo.ts:330
+    // smart_contracts/main/contract.algo.ts:320
     // if (card.balance < required) {
     frame_dig -2
     acct_params_get AcctBalance
     assert // account funded
     >
     bz smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn_after_if_else@3
-    // smart_contracts/main/contract.algo.ts:331-336
+    // smart_contracts/main/contract.algo.ts:321-326
     // itxn
     //   .payment({
     //     receiver: card,
@@ -3270,7 +3201,7 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:334
+    // smart_contracts/main/contract.algo.ts:324
     // amount: required - card.balance,
     frame_dig -2
     acct_params_get AcctBalance
@@ -3281,7 +3212,7 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn:
     itxn_field Amount
     frame_dig -2
     itxn_field Receiver
-    // smart_contracts/main/contract.algo.ts:331-335
+    // smart_contracts/main/contract.algo.ts:321-325
     // itxn
     //   .payment({
     //     receiver: card,
@@ -3291,7 +3222,7 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:331-336
+    // smart_contracts/main/contract.algo.ts:321-326
     // itxn
     //   .payment({
     //     receiver: card,
@@ -3301,7 +3232,7 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn:
     itxn_submit
 
 smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn_after_if_else@3:
-    // smart_contracts/main/contract.algo.ts:339-346
+    // smart_contracts/main/contract.algo.ts:329-336
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -3311,7 +3242,7 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn_after_if_else@3:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:344
+    // smart_contracts/main/contract.algo.ts:334
     // assetAmount: 0,
     intc_0 // 0
     itxn_field AssetAmount
@@ -3321,7 +3252,7 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn_after_if_else@3:
     itxn_field AssetReceiver
     frame_dig -2
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:339-345
+    // smart_contracts/main/contract.algo.ts:329-335
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -3333,7 +3264,7 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn_after_if_else@3:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:339-346
+    // smart_contracts/main/contract.algo.ts:329-336
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -3343,7 +3274,7 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn_after_if_else@3:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:348-351
+    // smart_contracts/main/contract.algo.ts:338-341
     // emit<CardAssetEnabled>({
     //   card: card,
     //   asset: asset,
@@ -3362,16 +3293,16 @@ smart_contracts/main/contract.algo.ts::Main.cardAssetOptIn_after_if_else@3:
 
 // smart_contracts/main/contract.algo.ts::Main.clearWithdrawalRequest(owner: bytes, card: bytes) -> void:
 clearWithdrawalRequest:
-    // smart_contracts/main/contract.algo.ts:407
+    // smart_contracts/main/contract.algo.ts:397
     // private clearWithdrawalRequest(owner: Account, card: Account): void {
     proto 2 0
-    // smart_contracts/main/contract.algo.ts:237
+    // smart_contracts/main/contract.algo.ts:232
     // public withdrawals = BoxMap<Account, WithdrawalRequest>({ keyPrefix: 'wr' })
     bytec_3 // "wr"
     frame_dig -2
     concat
     dup
-    // smart_contracts/main/contract.algo.ts:408
+    // smart_contracts/main/contract.algo.ts:398
     // if (this.withdrawals(owner).exists && this.withdrawals(owner).value.card === card) {
     box_len
     bury 1
@@ -3383,18 +3314,18 @@ clearWithdrawalRequest:
     frame_dig -1
     ==
     bz clearWithdrawalRequest_after_if_else@3
-    // smart_contracts/main/contract.algo.ts:409
+    // smart_contracts/main/contract.algo.ts:399
     // const withdrawal = clone(this.withdrawals(owner).value)
     frame_dig 0
     dup
     box_get
     assert // Box must have value
-    // smart_contracts/main/contract.algo.ts:410
+    // smart_contracts/main/contract.algo.ts:400
     // this.withdrawals(owner).delete()
     swap
     box_del
     pop
-    // smart_contracts/main/contract.algo.ts:411
+    // smart_contracts/main/contract.algo.ts:401
     // emit<WithdrawalRequestCancelled>(withdrawal)
     dup
     extract 0 32
@@ -3419,7 +3350,7 @@ clearWithdrawalRequest:
     concat
     swap
     concat
-    bytec 20 // method "WithdrawalRequestCancelled(address,address,uint64,uint64,uint64,uint64)"
+    bytec 19 // method "WithdrawalRequestCancelled(address,address,uint64,uint64,uint64,uint64)"
     swap
     concat
     log
@@ -3430,7 +3361,7 @@ clearWithdrawalRequest_after_if_else@3:
 
 // smart_contracts/main/contract.algo.ts::Main.withdrawFunds(card: bytes, asset: uint64, amount: uint64, timestamp: uint64, nonce: uint64, withdrawalType: bytes) -> void:
 withdrawFunds:
-    // smart_contracts/main/contract.algo.ts:440-447
+    // smart_contracts/main/contract.algo.ts:430-437
     // private withdrawFunds(
     //   card: Account,
     //   asset: Asset,
@@ -3440,11 +3371,11 @@ withdrawFunds:
     //   withdrawalType: string,
     // ): void {
     proto 6 0
-    // smart_contracts/main/contract.algo.ts:449
+    // smart_contracts/main/contract.algo.ts:439
     // if (amount > 0) {
     frame_dig -4
     bz withdrawFunds_after_if_else@3
-    // smart_contracts/main/contract.algo.ts:450-457
+    // smart_contracts/main/contract.algo.ts:440-447
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -3454,7 +3385,7 @@ withdrawFunds:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:453
+    // smart_contracts/main/contract.algo.ts:443
     // assetReceiver: Txn.sender,
     txn Sender
     frame_dig -4
@@ -3464,7 +3395,7 @@ withdrawFunds:
     itxn_field AssetReceiver
     frame_dig -6
     itxn_field Sender
-    // smart_contracts/main/contract.algo.ts:450-456
+    // smart_contracts/main/contract.algo.ts:440-446
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -3476,7 +3407,7 @@ withdrawFunds:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:450-457
+    // smart_contracts/main/contract.algo.ts:440-447
     // itxn
     //   .assetTransfer({
     //     sender: card,
@@ -3488,28 +3419,28 @@ withdrawFunds:
     itxn_submit
 
 withdrawFunds_after_if_else@3:
-    // smart_contracts/main/contract.algo.ts:463
+    // smart_contracts/main/contract.algo.ts:453
     // recipient: Txn.sender,
     txn Sender
-    // smart_contracts/main/contract.algo.ts:466
+    // smart_contracts/main/contract.algo.ts:456
     // createdAt: withdrawalType === WithdrawalTypePermissionLess ? timestamp : 0,
     frame_dig -1
-    bytec 21 // "permissionless"
+    bytec 20 // "permissionless"
     ==
     intc_0 // 0
     frame_dig -3
     uncover 2
     select
-    // smart_contracts/main/contract.algo.ts:467
+    // smart_contracts/main/contract.algo.ts:457
     // expiresAt: withdrawalType === WithdrawalTypeApproved ? timestamp : 0,
     frame_dig -1
-    bytec 22 // "approved"
+    bytec 21 // "approved"
     ==
     intc_0 // 0
     frame_dig -3
     uncover 2
     select
-    // smart_contracts/main/contract.algo.ts:461-470
+    // smart_contracts/main/contract.algo.ts:451-460
     // emit<Withdrawal>({
     //   card: card,
     //   recipient: Txn.sender,
@@ -3553,17 +3484,17 @@ withdrawFunds_after_if_else@3:
     swap
     concat
     log
-    // smart_contracts/main/contract.algo.ts:472
+    // smart_contracts/main/contract.algo.ts:462
     // this.cards(card).value.withdrawalNonce = nonce + 1
     frame_dig -2
     intc_1 // 1
     +
-    // smart_contracts/main/contract.algo.ts:225
+    // smart_contracts/main/contract.algo.ts:220
     // public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
     bytec_0 // "cf"
     frame_dig -6
     concat
-    // smart_contracts/main/contract.algo.ts:472
+    // smart_contracts/main/contract.algo.ts:462
     // this.cards(card).value.withdrawalNonce = nonce + 1
     swap
     itob
@@ -3642,6 +3573,23 @@ _transferOwnership_ternary_false@2:
     // const previousOwner = this._owner.hasValue ? this._owner.value : Global.zeroAddress
     global ZeroAddress
     b _transferOwnership_ternary_merge@3
+
+
+// smart_contracts/roles/pausable.algo.ts::Pausable.whenNotPaused() -> void:
+whenNotPaused:
+    // smart_contracts/roles/pausable.algo.ts:44
+    // assert(!this.paused.value, 'CONTRACT_PAUSED')
+    intc_0 // 0
+    // smart_contracts/roles/pausable.algo.ts:37
+    // public paused = GlobalState<boolean>()
+    bytec 7 // "paused"
+    // smart_contracts/roles/pausable.algo.ts:44
+    // assert(!this.paused.value, 'CONTRACT_PAUSED')
+    app_global_get_ex
+    assert // check GlobalState exists
+    !
+    assert // CONTRACT_PAUSED
+    retsub
 
 
 // smart_contracts/roles/pausable.algo.ts::Pausable.onlyPauser() -> void:

@@ -129,11 +129,6 @@ type PermissionedWithdrawal = {
   genesisHash: bytes<32>
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- ARC28 event with no fields
-type RefundPause = {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- ARC28 event with no fields
-type RefundUnpause = {}
-
 type TreasuryAssetEnabled = {
   treasury: Account
   asset: Asset
@@ -260,11 +255,6 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
 
   // Ed25519 public key of the refund signer
   public refund_pubkey = GlobalState<bytes<32>>({ key: 'rpk' })
-
-  // Stops refunds on their own, without the contract-wide `paused` flag: halting refunds must
-  // not also halt cardDebit, and vice versa. Owner-gated rather than carrying its own pauser
-  // role.
-  public refund_paused = GlobalState<boolean>({ key: 'rpa' })
 
   // ========== Internal Utils ==========
   /**
@@ -488,7 +478,6 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     // at creation time.
     this.cards_active_count.value = 0
     this.paused.value = false
-    this.refund_paused.value = false
 
     return Global.currentApplicationAddress
   }
@@ -949,29 +938,6 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   // ========== Refund ==========
   // ===== Owner Methods =====
   /**
-   * Pause refunds, blocking refund until it is unpaused. Leaves the contract-wide
-   * pause untouched.
-   * Only the owner of the contract can call this method.
-   */
-  public pauseRefund(): void {
-    this.onlyOwner()
-
-    this.refund_paused.value = true
-    emit<RefundPause>({})
-  }
-
-  /**
-   * Unpause refunds, returning them to normal state.
-   * Only the owner of the contract can call this method.
-   */
-  public unpauseRefund(): void {
-    this.onlyOwner()
-
-    this.refund_paused.value = false
-    emit<RefundUnpause>({})
-  }
-
-  /**
    * Sets the refund signer public key. Rotating it invalidates every unsubmitted
    * signature, which is the intended emergency response.
    * Only the owner of the contract can call this method.
@@ -1194,7 +1160,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     nonce: uint64,
     signature: bytes<64>,
   ): void {
-    assert(!this.refund_paused.value, 'REFUND_PAUSED')
+    this.whenNotPaused()
     assert(this.refund_operators(Txn.sender).exists, 'SENDER_NOT_ALLOWED')
     assert(this.treasury.hasValue, 'TREASURY_NOT_FOUND')
     const treasuryAddress = this.treasury.value.address

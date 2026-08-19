@@ -1341,7 +1341,7 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * `cardDebit` is the one Main method behind `whenNotPaused`, which makes the pause the emergency
+   * `cardDebit` sits behind `whenNotPaused`, which makes the pause the emergency
    * brake on automated draws: with it engaged, an authorized operator debiting a live card at the
    * correct nonce — a call that succeeds a test later — is rejected with CONTRACT_PAUSED.
    */
@@ -2199,25 +2199,13 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * The refund pause is owner-gated — it carries no separate pauser role — so the contract's
-   * actual pauser-role holder gains nothing here and a non-owner is refused.
+   * Refunds sit behind the contract-wide pause: while it is set, a fully valid batch — live
+   * signature, correct nonce, authorized operator — is refused before any other check.
    */
-  test('Refund: pauseRefund is refused for a non-owner', async () => {
-    await expect(appClient.send.pauseRefund({ args: [], sender: user2.addr })).rejects.toThrow('SENDER_NOT_ALLOWED')
-
-    expect(await appClient.state.global.refundPaused()).toEqual(0n)
-  })
-
-  /**
-   * The refund-specific brake: while `refund_paused` is set, a fully valid batch — live
-   * signature, correct nonce, authorized operator — is refused before any other check. The
-   * contract-wide `paused` flag is untouched, preserving the separation from the debit flow.
-   */
-  test('Refund: pausing refunds rejects cardRefund with REFUND_PAUSED', async () => {
-    const paused = await appClient.send.pauseRefund({ args: [] })
+  test('Refund: paused contract rejects cardRefund with CONTRACT_PAUSED', async () => {
+    const paused = await appClient.send.pause({ args: [] })
     expect(paused.confirmation.poolError).toBe('')
-    expect(await appClient.state.global.refundPaused()).toEqual(1n)
-    expect(await appClient.state.global.paused()).toEqual(0n)
+    expect(await appClient.state.global.paused()).toEqual(1n)
 
     await expect(
       appClient.send.cardRefund({
@@ -2231,19 +2219,19 @@ describe('Auto-Draw Card', () => {
         sender: refundOperator.addr,
         staticFee: AlgoAmount.MicroAlgos(8_000),
       }),
-    ).rejects.toThrow('REFUND_PAUSED')
+    ).rejects.toThrow('CONTRACT_PAUSED')
   })
 
   /**
-   * Positive control for the pause, and proof the brake releases: after `unpauseRefund` a
-   * freshly signed single-recipient batch goes through and consumes the next nonce.
+   * Positive control for the pause, and proof the brake releases: after `unpause` a freshly
+   * signed single-recipient batch goes through and consumes the next nonce.
    */
-  test('Refund: unpausing refunds restores cardRefund', async () => {
+  test('Refund: unpausing restores cardRefund', async () => {
     const { algorand } = fixture.context
 
-    const unpaused = await appClient.send.unpauseRefund({ args: [] })
+    const unpaused = await appClient.send.unpause({ args: [] })
     expect(unpaused.confirmation.poolError).toBe('')
-    expect(await appClient.state.global.refundPaused()).toEqual(0n)
+    expect(await appClient.state.global.paused()).toEqual(0n)
 
     const suggestedParams = await algorand.client.algod.getTransactionParams().do()
     const genesisHash = suggestedParams.genesisHash!

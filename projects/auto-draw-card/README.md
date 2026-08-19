@@ -18,11 +18,11 @@ Two auxiliary contracts support an automated draw ("AutoDraw") flow on top of th
 
 ## Roles
 
-- **Owner** — administers the contract: recovers cards, authorizes withdraw and refund operators, configures the contract (partner address, omnibus address, killswitch app, withdrawal timeout, withdrawal and refund public keys), manages the refund treasury and refund pause, and reclaims MBR. Inherited from `Ownable` and transferable via `transferOwnership`.
+- **Owner** — administers the contract: recovers cards, authorizes withdraw and refund operators, configures the contract (partner address, omnibus address, killswitch app, withdrawal timeout, withdrawal and refund public keys), manages the refund treasury, and reclaims MBR. Inherited from `Ownable` and transferable via `transferOwnership`.
 - **Partner** — operates the card lifecycle: creates/closes cards and opts cards in/out of assets. Set by the owner via `setPartnerAddress`.
 - **Withdraw operator** — debits cards to the omnibus address via `cardDebit`. Authorized and revoked by the owner (`addWithdrawOperator` / `removeWithdrawOperator`), so debit processing can run from an operational key that holds no other privileges.
 - **Refund operator** — submits signed refund batches via `cardRefund`, paying recipients out of the treasury. Authorized and revoked by the owner (`addRefundOperator` / `removeRefundOperator`); the operator can only submit batches Partner has signed, never mint its own.
-- **Pauser** — can `pause`/`unpause` the contract, halting debits. Inherited from `Pausable` and updatable via `updatePauser`. (Refunds have a separate, owner-gated pause — see [Refunds](#refunds).)
+- **Pauser** — can `pause`/`unpause` the contract, halting debits and refunds. Inherited from `Pausable` and updatable via `updatePauser`.
 - **Card holder** — the account assigned as a card's `owner`. Can close the card, opt the card out of assets, and initiate/cancel/execute withdrawals.
 
 ## Design assumptions
@@ -60,7 +60,7 @@ Transfer or read contract ownership.
 
 #### pause()void / unpause()void / pauser()address / updatePauser(address)void
 
-Pause/unpause the contract and manage the pauser role.
+Pause/unpause the contract — halting `cardDebit` and `cardRefund` — and manage the pauser role.
 
 #### recoverAsset(uint64,uint64,address)void
 
@@ -158,8 +158,6 @@ Card holder. Executes a withdrawal before the wait time elapses, authorized by a
 
 Refunds compensate card debits that have already settled on chain. A `cardDebit` inner transfer is final once committed, so a refund is a _forward_ payment out of a dedicated **treasury** account — a rekeyed contract-controlled account, like a card — rather than a reversal out of the omnibus. Refund batches are authorized off-chain: Partner signs the batch with the refund signer key (registered via `setRefundSignerPubkey`), and an authorized refund operator submits it.
 
-Refunds carry their own pause switch (`refund_paused`), separate from the contract-wide `paused` flag, so halting refunds does not halt debits and vice versa. Unlike the contract-wide pause it is owner-gated rather than carrying its own pauser role.
-
 #### treasuryAssetOptIn(uint64)address
 
 Owner-only. Opts the treasury into an asset so refunds of that asset can be paid from it, and returns the treasury address (also readable via the `treasury` global state). The first call creates the treasury: a freshly rekeyed account must be funded to its minimum balance in the same group as its rekey, and the app account is unfunded at creation time, so the first opt-in creates, rekeys and funds it from the contract escrow in one call — four inner transactions; later opt-ins need at most two. The `treasury` global state is also written here rather than at deploy, so an updated live deployment needs no state migration. Any minimum-balance shortfall is always covered from the escrow, and a redundant opt-in fails with `ASSET_ALREADY_ENABLED`.
@@ -174,15 +172,11 @@ Owner-only. Closes the treasury account itself — the treasury counterpart of `
 
 #### cardRefund((address,uint64)[],uint64,uint64,uint64,byte[64])void
 
-Refund-operator only, when refunds are not paused. Pays a signed batch of up to 16 `(recipient, amount)` transfers of one asset out of the treasury. Args: `transfers, asset, expiresAt, nonce, signature`.
+Refund-operator only, when not paused. Pays a signed batch of up to 16 `(recipient, amount)` transfers of one asset out of the treasury. Args: `transfers, asset, expiresAt, nonce, signature`.
 
 The contract rebuilds the signed payload from its own state — treasury address, genesis hash — plus the call arguments, SHA-256 hashes its ARC-4 encoding, and verifies the ed25519 signature against the refund signer key, so a signature minted for a different treasury, network, batch or nonce cannot verify here. The treasury nonce makes each signature single-use, and the batch is atomic: every recipient is paid or none is. Zero amounts are counted but not transferred. Emits one `Refund` event summarizing the batch (`treasury, asset, count, total, expiresAt, nonce`).
 
 Two group-level requirements are the caller's to satisfy: every recipient holding plus the treasury holding must be made available through the group's account references (four accounts per app call, shared group-wide, so a full 16-recipient batch needs four extra pad app calls — which also raise the group's pooled inner-transaction and opcode budgets), and the group must carry one minimum fee per inner transaction: the transfers themselves plus whatever `ensureBudget` issues to buy opcode budget for the signature check.
-
-#### pauseRefund()void / unpauseRefund()void
-
-Owner-only. Halt or resume refunds without touching the contract-wide pause. State readable via the `refund_paused` global.
 
 #### setRefundSignerPubkey(byte[32])void
 
@@ -254,7 +248,6 @@ classDiagram
     MainContract : +address omnibus_address
     MainContract : +int killswitch_app
     MainContract : +struct treasury
-    MainContract : +bool refund_paused
     MainContract : deploy()
 
     MainContract <|-- Owner
@@ -278,7 +271,6 @@ classDiagram
         addWithdrawOperator()
         removeWithdrawOperator()
         cardRecover()
-        pauseRefund() / unpauseRefund()
         setRefundSignerPubkey()
         addRefundOperator()
         removeRefundOperator()
