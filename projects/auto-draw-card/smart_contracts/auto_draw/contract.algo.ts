@@ -29,6 +29,7 @@ import {
   bytes,
   Global,
   gtxn,
+  logicsig,
   LogicSig,
   OnCompleteAction,
   TemplateVar,
@@ -38,6 +39,7 @@ import { btoi } from '@algorandfoundation/algorand-typescript/op'
 import { Killswitch } from '../killswitch/contract.algo'
 import { Main } from '../main/contract.algo'
 
+@logicsig({ avmVersion: 13 })
 export class AutoDraw extends LogicSig {
   public program() {
     // Resolve this Lsig's own transaction by its position in the group. Txn.groupIndex
@@ -75,7 +77,6 @@ function autoDrawAsserts(txnAutoDraw: gtxn.AssetTransferTxn) {
   // Algo balance on fees. The fee is expected to be covered by another (fee-pooling)
   // transaction in the group, so this transaction itself must contribute nothing.
   assert(txnAutoDraw.fee === 0, 'NON-ZERO_FEE')
-  return txnAutoDraw
 }
 
 function killswitchAsserts(txnAutoDraw: gtxn.AssetTransferTxn) {

@@ -31,6 +31,7 @@ import {
   Asset,
   BoxMap,
   bytes,
+  contract,
   Global,
   GlobalState,
   Txn,
@@ -46,6 +47,7 @@ type AccountAssetKey = [Account, Asset]
 // Delegation is keyed by (holder, asset), so it spans every card the holder owns rather than any
 // single card. See the trust model above `Main` in ../main/contract.algo.ts for why that is
 // deliberate and what a holder owning several cards does — and does not — imply here.
+@contract({ avmVersion: 13 })
 export class Killswitch extends classes(Ownable, Pausable, Recoverable) {
   // ========== Storage ==========
   public accountAssetPairs = BoxMap<AccountAssetKey, bytes<0>>({ keyPrefix: '' })

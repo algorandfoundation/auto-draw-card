@@ -32,6 +32,7 @@ import {
   bytes,
   clone,
   compile,
+  contract,
   Contract,
   emit,
   ensureBudget,
@@ -129,6 +130,7 @@ type PermissionedWithdrawal = {
   genesisHash: bytes<32>
 }
 
+@contract({ avmVersion: 13 })
 class ControlledAddress extends Contract {
   /**
    * Create a new account, rekeying it to the caller application address
@@ -167,6 +169,7 @@ class ControlledAddress extends Contract {
 //
 // Anything that would break under multiple cards per holder is a real bug; anything that merely
 // applies holder-wide is the design.
+@contract({ avmVersion: 13 })
 export class Main extends classes(Ownable, Pausable, Recoverable) {
   // ========== Storage ==========
   // Cards
