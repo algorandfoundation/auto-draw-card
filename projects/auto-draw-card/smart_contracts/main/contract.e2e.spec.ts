@@ -1,7 +1,7 @@
 import { Config } from '@algorandfoundation/algokit-utils'
 import { algorandFixture } from '@algorandfoundation/algokit-utils/testing'
-import type { ResourceReference } from '@algorandfoundation/algokit-utils/types/app-manager'
 import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount'
+import type { ResourceReference } from '@algorandfoundation/algokit-utils/types/app-manager'
 import algosdk from 'algosdk'
 import { createHash, createPrivateKey, sign as cryptoSign } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -2232,7 +2232,7 @@ describe('Auto-Draw Card', () => {
         sender: refundOperator.addr,
         staticFee: AlgoAmount.MicroAlgos(8_000),
       }),
-    ).rejects.toThrow(/too long/)
+    ).rejects.toThrow('TOO_MANY_TRANSFERS')
   })
 
   /**
