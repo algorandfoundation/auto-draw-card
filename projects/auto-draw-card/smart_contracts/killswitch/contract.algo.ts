@@ -26,18 +26,20 @@ import {
   abimethod,
   Account,
   Application,
-  arc4,
   assert,
   Asset,
   BoxMap,
   bytes,
+  Bytes,
   contract,
   Global,
   GlobalState,
+  op,
   Txn,
 } from '@algorandfoundation/algorand-typescript'
+import { decodeArc4 } from '@algorandfoundation/algorand-typescript/arc4'
 import { classes } from 'polytype'
-import type { Main } from '../main/contract.algo'
+import { CARDS_BOX_PREFIX, type CardData } from '../main/contract.algo'
 import { Ownable } from '../roles/ownable.algo'
 import { Pausable } from '../roles/pausable.algo'
 import { Recoverable } from '../roles/recoverable.algo'
@@ -90,7 +92,8 @@ export class Killswitch extends classes(Ownable, Pausable, Recoverable) {
    *
    * Gated to accounts that own a card in the Main contract, to prevent abuse of the
    * owner-funded box MBR. The caller must supply a card address they own; ownership is
-   * verified against the Main contract via a cross-contract call.
+   * verified by reading the card box in the Main contract directly (AVM 13 foreign box
+   * read — Main opts in via appForeignBoxReads).
    *
    * @param card A card address owned by the caller, used to prove card ownership.
    * @param asset The asset to enable delegation for.
@@ -100,11 +103,9 @@ export class Killswitch extends classes(Ownable, Pausable, Recoverable) {
     assert(!this.accountAssetPairs(key).exists, 'ALREADY_ENABLED')
     assert(card.isOptedIn(asset), 'ASSET_NOT_ALLOWED')
 
-    const cardData = arc4.abiCall<typeof Main.prototype.getCardData>({
-      appId: this.main_app.value,
-      args: [card],
-    }).returnValue
-    assert(cardData.owner === Txn.sender, 'NOT_CARD_OWNER')
+    const [cardData, exists] = op.AppBox.get(this.main_app.value, Bytes(CARDS_BOX_PREFIX).concat(card.bytes))
+    assert(exists, 'NOT_CARD_OWNER')
+    assert(decodeArc4<CardData>(cardData).owner === Txn.sender, 'NOT_CARD_OWNER')
 
     this.accountAssetPairs(key).create({ size: 0 })
   }

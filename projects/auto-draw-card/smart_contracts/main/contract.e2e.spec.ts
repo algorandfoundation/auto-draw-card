@@ -932,7 +932,7 @@ describe('Auto-Draw Card', () => {
     const result = await ksClient.send.enable({
       args: { card: autoDrawCardAddress, asset: fakeUSDC },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(2_000),
+      staticFee: AlgoAmount.MicroAlgos(1_000),
     })
     expect(result.confirmation.poolError).toBe('')
   })
@@ -947,7 +947,7 @@ describe('Auto-Draw Card', () => {
       ksClient.send.enable({
         args: { card: autoDrawCardAddress, asset: fakeUSDC },
         sender: user2.addr,
-        staticFee: AlgoAmount.MicroAlgos(2_000),
+        staticFee: AlgoAmount.MicroAlgos(1_000),
       }),
     ).rejects.toThrow('NOT_CARD_OWNER')
   })
@@ -997,7 +997,7 @@ describe('Auto-Draw Card', () => {
     await ksClient.send.enable({
       args: { card: autoDrawCardAddress, asset: fakeUSDC },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(2_000),
+      staticFee: AlgoAmount.MicroAlgos(1_000),
     })
 
     const result = await ksClient.send.authorize({
@@ -1016,7 +1016,7 @@ describe('Auto-Draw Card', () => {
       ksClient.send.enable({
         args: { card: autoDrawCardAddress, asset: fakeUSDC },
         sender: user.addr,
-        staticFee: AlgoAmount.MicroAlgos(2_000),
+        staticFee: AlgoAmount.MicroAlgos(1_000),
       }),
     ).rejects.toThrow('ALREADY_ENABLED')
   })
@@ -1230,7 +1230,7 @@ describe('Auto-Draw Card', () => {
     await ksClient.send.enable({
       args: { card: autoDrawCardAddress, asset: fakeUSDC },
       sender: user.addr,
-      staticFee: AlgoAmount.MicroAlgos(2_000),
+      staticFee: AlgoAmount.MicroAlgos(1_000),
     })
   })
 
