@@ -32,6 +32,7 @@ import {
   bytes,
   clone,
   compile,
+  contract,
   Contract,
   emit,
   ensureBudget,
@@ -50,12 +51,16 @@ import { Pausable } from '../roles/pausable.algo'
 import { Recoverable } from '../roles/recoverable.algo'
 
 // CardData
-type CardData = {
+export type CardData = {
   owner: Account
   address: Account
   nonce: uint64
   withdrawalNonce: uint64
 }
+
+// Box key prefix of the `cards` BoxMap. Exported because Killswitch reads these boxes
+// directly (AVM 13 foreign box read) and must construct the same keys.
+export const CARDS_BOX_PREFIX = 'cf'
 
 const WithdrawalTypeApproved = 'approved'
 const WithdrawalTypePermissionLess = 'permissionless'
@@ -177,6 +182,7 @@ type Treasury = {
 // for a batch that could never execute.
 const MaxRefundTransfers = 48
 
+@contract({ avmVersion: 13 })
 class ControlledAddress extends Contract {
   /**
    * Create a new account, rekeying it to the caller application address
@@ -215,10 +221,11 @@ class ControlledAddress extends Contract {
 //
 // Anything that would break under multiple cards per holder is a real bug; anything that merely
 // applies holder-wide is the design.
+@contract({ avmVersion: 13 })
 export class Main extends classes(Ownable, Pausable, Recoverable) {
   // ========== Storage ==========
   // Cards
-  public cards = BoxMap<Account, CardData>({ keyPrefix: 'cf' })
+  public cards = BoxMap<Account, CardData>({ keyPrefix: CARDS_BOX_PREFIX })
 
   public cards_active_count = GlobalState<uint64>({ key: 'cfac' })
 
@@ -480,6 +487,11 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     this.cards_active_count.value = 0
     this.paused.value = false
 
+    // Allow any app to read this app's boxes, so Killswitch can verify card ownership by
+    // reading the `cards` box directly instead of an inner call. Read-only: box contents
+    // are public chain data regardless.
+    op.AppParamsSet.appForeignBoxReads(true)
+
     return Global.currentApplicationAddress
   }
 
@@ -489,6 +501,8 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   @abimethod({ allowActions: ['UpdateApplication'] })
   public update(): void {
     this.onlyOwner()
+
+    op.AppParamsSet.appForeignBoxReads(true)
   }
 
   /**
