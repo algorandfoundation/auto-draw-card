@@ -2,6 +2,27 @@
 
 An Algorand smart-contract project (built with [AlgoKit](https://github.com/algorandfoundation/algokit-cli) and Algorand TypeScript) implementing a card-management system with an opt-in automated debit flow. See [Getting started](#getting-started) for setup.
 
+## ⚠️ Disclaimer — not audited, not for production
+
+**These contracts have not been audited and must not be used in production.** They are one component of a larger platform and are intended to operate together with non-public, off-chain logic — card issuance, card-network authorization, withdrawal signing, and escrow funding. Deployed on their own they are neither complete nor safe.
+
+Alongside the [design assumptions](#design-assumptions) below, the contracts assume the following, none of which is enforced on-chain:
+
+- **A fully trusted operator.** The owner can update or destroy the contract, reassign any card (`cardRecover`), and sweep any asset it holds (`recoverAsset`). The Partner, withdraw operators, and pauser are assumed to be operational keys of the same trusted platform.
+- **An owner-funded escrow.** All minimum balance requirements are paid from the contract's balance; the owner must keep it funded off-chain.
+- **Off-chain signing and authorization services.** Debits (`cardDebit`) are initiated by off-chain card-network authorization logic, permissioned withdrawals depend on an off-chain service holding the withdrawal ed25519 key, and signed AutoDraw delegations are produced and held off-chain (the Killswitch is the holder's on-chain control over them).
+
+### Design assumptions
+
+**Partner enforces one active card per holder off-chain**, at card issuance. The contracts deliberately do not enforce it: `cardRecover` can hand a holder a second card directly, and on-chain logic is written to stay correct either way — the `CARD_MISMATCH` guard in `withdraw` exists for precisely that case.
+
+Two consequences follow from keying state by holder rather than by card, and both are intended behaviour:
+
+- A holder has a single withdrawal-request slot covering all of their cards (`withdrawals` is keyed by the requesting account).
+- Revoking a holder's AutoDraw delegation applies to every card they own (the Killswitch keys delegation by `(account, asset)`).
+
+The authoritative statement of this trust model is the comment block above `export class Main` in [smart_contracts/main/contract.algo.ts](./smart_contracts/main/contract.algo.ts).
+
 ## Concept
 
 This project is built around a **Main** contract that "generates" a new address for each card that's created. Every card is a rekeyed account controlled by the contract.
@@ -24,17 +45,6 @@ Two auxiliary contracts support an automated draw ("AutoDraw") flow on top of th
 - **Refund operator** — submits signed refund batches via `cardRefund`, paying recipients out of the treasury. Authorized and revoked by the owner (`addRefundOperator` / `removeRefundOperator`); the operator can only submit batches Partner has signed, never mint its own.
 - **Pauser** — can `pause`/`unpause` the contract, halting debits and refunds. Inherited from `Pausable` and updatable via `updatePauser`.
 - **Card holder** — the account assigned as a card's `owner`. Can close the card, opt the card out of assets, and initiate/cancel/execute withdrawals.
-
-## Design assumptions
-
-**Partner enforces one active card per holder off-chain**, at card issuance. The contracts deliberately do not enforce it: `cardRecover` can hand a holder a second card directly, and on-chain logic is written to stay correct either way — the `CARD_MISMATCH` guard in `withdraw` exists for precisely that case.
-
-Two consequences follow from keying state by holder rather than by card, and both are intended behaviour:
-
-- A holder has a single withdrawal-request slot covering all of their cards (`withdrawals` is keyed by the requesting account).
-- Revoking a holder's AutoDraw delegation applies to every card they own (the Killswitch keys delegation by `(account, asset)`).
-
-The authoritative statement of this trust model is the comment block above `export class Main` in [smart_contracts/main/contract.algo.ts](./smart_contracts/main/contract.algo.ts).
 
 ## Main contract
 
