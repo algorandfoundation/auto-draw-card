@@ -4,13 +4,14 @@ An Algorand smart-contract project (built with [AlgoKit](https://github.com/algo
 
 ## ⚠️ Disclaimer — not audited, not for production
 
-**These contracts have not been audited and must not be used in production.** They are one component of a larger platform and are intended to operate together with non-public, off-chain logic — card issuance, card-network authorization, withdrawal signing, and escrow funding. Deployed on their own they are neither complete nor safe.
+**These contracts have not been audited and must not be used in production.** They are one component of a larger platform and are intended to operate together with non-public, off-chain logic — card issuance, card-network authorization, withdrawal and refund signing, and escrow funding. Deployed on their own they are neither complete nor safe.
 
 Alongside the [design assumptions](#design-assumptions) below, the contracts assume the following, none of which is enforced on-chain:
 
-- **A fully trusted operator.** The owner can update or destroy the contract, reassign any card (`cardRecover`), and sweep any asset it holds (`recoverAsset`). The Partner, withdraw operators, and pauser are assumed to be operational keys of the same trusted platform.
+- **A fully trusted operator.** The owner can update or destroy the contract, reassign any card (`cardRecover`), and sweep any asset it holds (`recoverAsset`). The Partner, withdraw operators, refund operators, and pauser are assumed to be operational keys of the same trusted platform.
 - **An owner-funded escrow.** All minimum balance requirements are paid from the contract's balance; the owner must keep it funded off-chain.
-- **Off-chain signing and authorization services.** Debits (`cardDebit`) are initiated by off-chain card-network authorization logic, permissioned withdrawals depend on an off-chain service holding the withdrawal ed25519 key, and signed AutoDraw delegations are produced and held off-chain (the Killswitch is the holder's on-chain control over them).
+- **Off-chain signing and authorization services.** Debits (`cardDebit`) are initiated by off-chain card-network authorization logic, permissioned withdrawals and refund batches depend on off-chain services holding the withdrawal and refund ed25519 keys, and signed AutoDraw delegations are produced and held off-chain (the Killswitch is the holder's on-chain control over them).
+- **Refund correctness lives off-chain.** `cardRefund` pays whatever batch the refund signer authorized: the contract verifies the operator, signature, nonce, and expiry, but nothing on-chain ties a batch to prior debits, checks that recipients are card holders, or prevents the same debit being refunded twice — that bookkeeping is the Partner's (see [Refunds](#refunds)). The treasury float that pays batches is funded off-chain, and the single treasury nonce means batches must be minted and submitted strictly in sequence.
 
 ### Design assumptions
 
