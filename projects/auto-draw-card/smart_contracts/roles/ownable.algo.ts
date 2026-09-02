@@ -91,6 +91,7 @@ export class Ownable extends Contract {
   public transferOwnership(newOwner: Account): void {
     this.onlyOwner()
 
+    assert(newOwner !== Global.zeroAddress, 'ADDRESS_NOT_ALLOWED')
     this._transferOwnership(newOwner)
   }
 }
