@@ -5,7 +5,7 @@
 // @algorandfoundation/algorand-typescript/arc4/index.d.ts::Contract.approvalProgram() -> uint64:
 main:
     intcblock 0 1
-    // smart_contracts/main/contract.algo.ts:137-138
+    // smart_contracts/main/contract.algo.ts:150-151
     // @contract({ avmVersion: 13 })
     // class ControlledAddress extends Contract {
     pushbytes 0x561d2fea // method "new()address"
@@ -14,7 +14,7 @@ main:
     err
 
 main_new_route@2:
-    // smart_contracts/main/contract.algo.ts:143
+    // smart_contracts/main/contract.algo.ts:156
     // @abimethod({ allowActions: ['DeleteApplication'], onCreate: 'require' })
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -28,7 +28,7 @@ main_new_route@2:
 
 // smart_contracts/main/contract.algo.ts::ControlledAddress.new[routing]() -> void:
 new:
-    // smart_contracts/main/contract.algo.ts:145-151
+    // smart_contracts/main/contract.algo.ts:158-164
     // itxn
     //   .payment({
     //     receiver: Global.currentApplicationAddress,
@@ -37,19 +37,19 @@ new:
     //   })
     //   .submit()
     itxn_begin
-    // smart_contracts/main/contract.algo.ts:147
+    // smart_contracts/main/contract.algo.ts:160
     // receiver: Global.currentApplicationAddress,
     global CurrentApplicationAddress
-    // smart_contracts/main/contract.algo.ts:149
+    // smart_contracts/main/contract.algo.ts:162
     // rekeyTo: Global.callerApplicationAddress,
     global CallerApplicationAddress
     itxn_field RekeyTo
-    // smart_contracts/main/contract.algo.ts:148
+    // smart_contracts/main/contract.algo.ts:161
     // amount: 0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // smart_contracts/main/contract.algo.ts:145-150
+    // smart_contracts/main/contract.algo.ts:158-163
     // itxn
     //   .payment({
     //     receiver: Global.currentApplicationAddress,
@@ -60,7 +60,7 @@ new:
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/main/contract.algo.ts:145-151
+    // smart_contracts/main/contract.algo.ts:158-164
     // itxn
     //   .payment({
     //     receiver: Global.currentApplicationAddress,
@@ -69,13 +69,13 @@ new:
     //   })
     //   .submit()
     itxn_submit
-    // smart_contracts/main/contract.algo.ts:143
+    // smart_contracts/main/contract.algo.ts:156
     // @abimethod({ allowActions: ['DeleteApplication'], onCreate: 'require' })
     pushbytes 0x151f7c75
-    // smart_contracts/main/contract.algo.ts:153
+    // smart_contracts/main/contract.algo.ts:166
     // return Global.currentApplicationAddress
     global CurrentApplicationAddress
-    // smart_contracts/main/contract.algo.ts:143
+    // smart_contracts/main/contract.algo.ts:156
     // @abimethod({ allowActions: ['DeleteApplication'], onCreate: 'require' })
     concat
     log

@@ -65,6 +65,45 @@ describe('Auto-Draw Card', () => {
   let bindingRequest: WithdrawalRequest
   const BINDING_FUND_AMOUNT = 4_000_000n
 
+  /**
+   * Card creation is two calls — `cardInit` mints and funds the account, `cardClaim` binds it to a
+   * holder — because the card box is keyed by an address that does not exist until the first call
+   * has run. Most tests only need a live card, so this wraps the pair; the two-phase tests below
+   * exercise each call on its own.
+   *
+   * The init fee covers the inner app create, its rekey payment, the funding payment and, with an
+   * asset, the opt-in. The claim has no inner transactions.
+   */
+  async function createCard(cardOwner: string, asset: bigint | number): Promise<string> {
+    const init = await appClient.send.cardInit({
+      args: { asset },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(asset ? 5_000 : 4_000),
+    })
+    expect(init.return).toBeDefined()
+    const card = init.return!
+
+    const claim = await appClient.send.cardClaim({
+      args: { cardOwner, card },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(claim.return).toBe(card)
+
+    return card
+  }
+
+  /**
+   * True if one of the ARC-28 logs carries exactly `payload` after its 4-byte event selector.
+   * Matching on the payload rather than the selector keeps the assertions from depending on
+   * re-deriving the hash.
+   */
+  function emitted(logs: Uint8Array[] | undefined, payload: Uint8Array): boolean {
+    return (logs ?? []).some((log) => Buffer.from(log).subarray(4).equals(Buffer.from(payload)))
+  }
+
+  const pubkey = (address: string) => algosdk.decodeAddress(address).publicKey
+
   beforeAll(async () => {
     await fixture.newScope()
     Config.configure({ populateAppCallResources: true })
@@ -158,9 +197,9 @@ describe('Auto-Draw Card', () => {
 
   /**
    * Registers the partner address that operates the card lifecycle. Partner-gated
-   * methods (`cardCreate`, `cardAssetOptIn`, `cardClose`, `cardDisableAsset`) read this
-   * global state, so it must be set before any card is created. The owner account
-   * doubles as the partner for the rest of the suite.
+   * methods (`cardInit`, `cardClaim`, `cardDiscard`, `cardAssetOptIn`, `cardClose`,
+   * `cardDisableAsset`) read this global state, so it must be set before any card is created.
+   * The owner account doubles as the partner for the rest of the suite.
    */
   test('Set partner address', async () => {
     const result = await appClient.send.setPartnerAddress({
@@ -290,45 +329,174 @@ describe('Auto-Draw Card', () => {
     expect(recover.confirmation.poolError).toBe('')
   })
 
+  // ========== Two-phase card creation ==========
+
   /**
-   * Negative case for the partner gate on card creation: an account that is not the
-   * partner cannot mint cards, reverting with SENDER_NOT_ALLOWED.
+   * Negative cases for the partner gate on the card lifecycle. All three phases — mint, bind,
+   * discard — are partner-only: minting spends escrow, binding decides who controls a card, and
+   * discarding closes an account. Each is refused with SENDER_NOT_ALLOWED before it reads or
+   * writes anything, so the arguments here need not be valid.
    */
-  test('cardCreate fails when called by non-partner', async () => {
+  test('cardInit, cardClaim and cardDiscard fail when called by non-partner', async () => {
     await expect(
-      appClient.send.cardCreate({
-        args: {
-          cardOwner: user2.addr.toString(),
-          asset: 0,
-        },
+      appClient.send.cardInit({
+        args: { asset: 0 },
         sender: user2.addr,
         staticFee: AlgoAmount.MicroAlgos(4_000),
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    await expect(
+      appClient.send.cardClaim({
+        args: { cardOwner: user2.addr.toString(), card: user2.addr.toString() },
+        sender: user2.addr,
+      }),
+    ).rejects.toThrow('SENDER_NOT_ALLOWED')
+
+    await expect(
+      appClient.send.cardDiscard({
+        args: { card: user2.addr.toString(), asset: 0 },
+        sender: user2.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
       }),
     ).rejects.toThrow('SENDER_NOT_ALLOWED')
   })
 
   /**
-   * Creates a card account for a holder without opting into any asset (asset 0). This is
-   * the lightweight card-creation path; the returned address is the freshly minted card
-   * account that can later be opted into assets or closed.
+   * First phase of card creation, without an asset. `cardInit` generates the account, rekeys it to
+   * the contract and funds its minimum balance from the escrow — and stops there. The card box is
+   * keyed by this very address, which nobody knew before the call ran, so it cannot be written
+   * here (see `cardClaim` below). What comes out is a contract-controlled account that the rest
+   * of the contract does not yet recognise as a card: no box, no entry in the active count, and
+   * `getCardData` rejects it. It is held in the pending count instead, and CardInitialized is the
+   * only event it leaves.
    */
-  test('Create new card without assets', async () => {
-    const result = await appClient.send.cardCreate({
-      args: {
-        cardOwner: user2.addr.toString(),
-        asset: 0,
-      },
+  test('cardInit mints a contract-controlled account that is not yet a card', async () => {
+    const { algorand } = fixture.context
+
+    const activeBefore = await appClient.state.global.cardsActiveCount()
+
+    const result = await appClient.send.cardInit({
+      args: { asset: 0 },
       sender: owner.addr,
       staticFee: AlgoAmount.MicroAlgos(4_000),
     })
     expect(result.return).toBeDefined()
 
     newCardAddress = result.return!
+
+    // The account exists, is rekeyed to the contract, and holds exactly its minimum balance.
+    const info = await algorand.account.getInformation(newCardAddress)
+    expect(info.authAddr?.toString()).toBe(appClient.appAddress.toString())
+    expect(info.balance.microAlgos).toEqual(info.minBalance.microAlgos)
+
+    // But it is not a card: it is pending.
+    expect((await appClient.state.box.cards.getMap()).has(newCardAddress)).toBe(false)
+    expect(await appClient.state.global.cardsActiveCount()).toEqual(activeBefore)
+    expect(await appClient.state.global.cardsPendingCount()).toEqual(1n)
+    await expect(appClient.send.getCardData({ args: { card: newCardAddress } })).rejects.toThrow()
+
+    // CardInitialized carries the new address.
+    expect(emitted(result.confirmation.logs, pubkey(newCardAddress))).toBe(true)
+  })
+
+  /**
+   * `cardClaim` only binds accounts the contract controls. The rekey is the trace `cardInit`
+   * leaves, and it is also what every inner transaction signed for the card depends on: a box
+   * written for an ordinary account would be a card the contract could never debit or close. A
+   * funded account that was never rekeyed is refused with INVALID_CARD and no box appears.
+   */
+  test('cardClaim refuses an account that is not rekeyed to the contract', async () => {
+    await expect(
+      appClient.send.cardClaim({
+        args: { cardOwner: user2.addr.toString(), card: circle.addr.toString() },
+        sender: owner.addr,
+      }),
+    ).rejects.toThrow('INVALID_CARD')
+
+    expect((await appClient.state.box.cards.getMap()).has(circle.addr.toString())).toBe(false)
+  })
+
+  /**
+   * Second phase of card creation. Now that the address is known, the partner can attach the box
+   * reference and `cardClaim` does what the old single call did after minting: writes the box
+   * with the holder and the address, counts the card as active, and emits CardCreated — so a
+   * subscriber keying on that event still sees `(cardOwner, card)` exactly once per card, at the
+   * moment the card becomes usable.
+   */
+  test('cardClaim binds the initialised account to its holder', async () => {
+    const activeBefore = await appClient.state.global.cardsActiveCount()
+
+    const result = await appClient.send.cardClaim({
+      args: { cardOwner: user2.addr.toString(), card: newCardAddress },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(result.return).toBe(newCardAddress)
+
+    const cardData = await appClient.send.getCardData({
+      args: { card: newCardAddress },
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(cardData.return?.owner).toBe(user2.addr.toString())
+    expect(cardData.return?.address).toBe(newCardAddress)
+    expect(cardData.return?.nonce).toEqual(0n)
+    expect(cardData.return?.withdrawalNonce).toEqual(0n)
+
+    // Pending became active.
+    expect(await appClient.state.global.cardsActiveCount()).toEqual(activeBefore! + 1n)
+    expect(await appClient.state.global.cardsPendingCount()).toEqual(0n)
+
+    expect(emitted(result.confirmation.logs, Buffer.concat([user2.addr.publicKey, pubkey(newCardAddress)]))).toBe(true)
+  })
+
+  /**
+   * A card can be claimed once. The account is still rekeyed to the contract, so the rekey check
+   * passes; it is the box check that stops a second claim — which would otherwise silently hand the
+   * card to a different holder and double-count it. The original holder is untouched.
+   */
+  test('cardClaim refuses a card that is already claimed', async () => {
+    await expect(
+      appClient.send.cardClaim({
+        args: { cardOwner: user.addr.toString(), card: newCardAddress },
+        sender: owner.addr,
+      }),
+    ).rejects.toThrow('CARD_ALREADY_CLAIMED')
+
+    const cardData = await appClient.send.getCardData({ args: { card: newCardAddress } })
+    expect(cardData.return?.owner).toBe(user2.addr.toString())
+  })
+
+  /**
+   * `cardDiscard` is for accounts that never became cards. A live card has a holder, a box and a
+   * place in the active count, and closing it is `cardClose`'s job — which clears the holder's
+   * pending request and keeps the count honest. Discarding it would skip all of that, so a claimed
+   * card is refused with CARD_ALREADY_CLAIMED and stays exactly as it was.
+   */
+  test('cardDiscard refuses a live card', async () => {
+    const { algorand } = fixture.context
+
+    await expect(
+      appClient.send.cardDiscard({
+        args: { card: newCardAddress, asset: 0 },
+        sender: owner.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('CARD_ALREADY_CLAIMED')
+
+    expect((await appClient.state.box.cards.getMap()).has(newCardAddress)).toBe(true)
+    const info = await algorand.account.getInformation(newCardAddress)
+    expect(info.balance.microAlgos).toEqual(info.minBalance.microAlgos)
   })
 
   /**
    * Closes the asset-less card created above and reclaims its minimum balance back to the
-   * funder, confirming the create/close lifecycle works for cards holding no assets.
+   * funder, confirming the init/claim/close lifecycle works for cards holding no assets.
+   * CardClosed is emitted with the card and the holder it was closed for.
+   *
+   * Once closed the account is gone from the ledger, so it cannot be claimed a second time: the
+   * rekey check has nothing to read. Pins that a closed card cannot be resurrected by replaying
+   * its claim.
    */
   test('Close card without assets', async () => {
     const result = await appClient.send.cardClose({
@@ -337,13 +505,106 @@ describe('Auto-Draw Card', () => {
     })
 
     expect(result.confirmation.poolError).toBe('')
+    expect(emitted(result.confirmation.logs, Buffer.concat([pubkey(newCardAddress), user2.addr.publicKey]))).toBe(true)
+
+    await expect(
+      appClient.send.cardClaim({
+        args: { cardOwner: user2.addr.toString(), card: newCardAddress },
+        sender: owner.addr,
+      }),
+    ).rejects.toThrow()
+  })
+
+  /**
+   * The orphan case the split creates: `cardInit` succeeded, but the partner never followed up
+   * with `cardClaim` — a crash between the two calls, or a response it never read. The account
+   * has no box and is not an active card; the only thing the contract knows about it is the
+   * pending count. That count is what keeps `destroy` from deleting the app while the account is
+   * still rekeyed to it — after which the escrow that funded it would be stranded for good — and
+   * it is asserted directly here (the owner is refused with CARDS_STILL_PENDING even though no
+   * card is active). `cardDiscard` is the way back: it closes out the asset the account was
+   * initialised with, closes the account, and returns every microAlgo the escrow put in — the
+   * app balance is identical before and after, with the outer fees paid by the partner. It emits
+   * CardAssetDisabled for the close-out and CardDiscarded for the account, and the discarded
+   * address can no longer be claimed.
+   */
+  test('cardDiscard tears down an unclaimed account and returns its balance to the escrow', async () => {
+    const { algorand } = fixture.context
+
+    const appBefore = await algorand.account.getInformation(appClient.appAddress)
+
+    const init = await appClient.send.cardInit({
+      args: { asset: fakeUSDC },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(5_000),
+    })
+    const orphan = init.return!
+
+    // Initialised with the asset — opted in, funded for it — and still not a card, only pending.
+    const holding = await algorand.asset.getAccountInformation(orphan, fakeUSDC)
+    expect(holding.balance).toEqual(0n)
+    expect((await appClient.state.box.cards.getMap()).has(orphan)).toBe(false)
+    expect(await appClient.state.global.cardsPendingCount()).toEqual(1n)
+
+    // Nothing is active, yet the pending account alone blocks destroy.
+    expect(await appClient.state.global.cardsActiveCount()).toEqual(0n)
+    await expect(
+      appClient.send.delete.destroy({
+        args: [],
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('CARDS_STILL_PENDING')
+
+    // The fee covers three inner transactions: the asset close-out, the sweep of the freed
+    // opt-in MBR, and the account close.
+    const result = await appClient.send.cardDiscard({
+      args: { card: orphan, asset: fakeUSDC },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(4_000),
+    })
+    expect(result.confirmation.poolError).toBe('')
+
+    const after = await algorand.account.getInformation(orphan)
+    expect(after.balance.microAlgos).toEqual(0n)
+    expect(await appClient.state.global.cardsPendingCount()).toEqual(0n)
+
+    const appAfter = await algorand.account.getInformation(appClient.appAddress)
+    expect(appAfter.balance.microAlgos).toEqual(appBefore.balance.microAlgos)
+
+    expect(emitted(result.confirmation.logs, Buffer.concat([pubkey(orphan), algosdk.encodeUint64(fakeUSDC)]))).toBe(
+      true,
+    )
+    expect(emitted(result.confirmation.logs, pubkey(orphan))).toBe(true)
+
+    await expect(
+      appClient.send.cardClaim({
+        args: { cardOwner: user2.addr.toString(), card: orphan },
+        sender: owner.addr,
+      }),
+    ).rejects.toThrow()
+  })
+
+  /**
+   * `cardDiscard` closes accounts the contract controls and nothing else. It signs the close as
+   * the account, so an address that is not rekeyed to the contract could not be closed anyway —
+   * but the guard turns a confusing inner-transaction failure into INVALID_CARD, and it is what
+   * makes the box check meaningful: without it, "no box" alone would describe every account on
+   * the network.
+   */
+  test('cardDiscard refuses an account that is not rekeyed to the contract', async () => {
+    await expect(
+      appClient.send.cardDiscard({
+        args: { card: circle.addr.toString(), asset: 0 },
+        sender: owner.addr,
+        staticFee: AlgoAmount.MicroAlgos(2_000),
+      }),
+    ).rejects.toThrow('INVALID_CARD')
   })
 
   /**
    * Negative case for the card-existence guard in `cardAssetOptIn`: the partner cannot opt an
    * address that has no card box into an asset, because there would be no card to fund the
-   * opt-in MBR or to authorize the inner transfer. Pins the guard so it cannot be dropped to
-   * make the ordering test below pass.
+   * opt-in MBR or to authorize the inner transfer.
    */
   test('cardAssetOptIn fails for an unknown card', async () => {
     await expect(
@@ -359,32 +620,82 @@ describe('Auto-Draw Card', () => {
   })
 
   /**
-   * Creates a card and opts it into FakeUSDC in a single call. The returned address is
-   * reused throughout the main spend/withdraw flow below, so this card is the primary
-   * subject of the asset-bearing tests.
+   * The same guard applies to an initialised-but-unclaimed account, even though the contract
+   * controls it and could sign the opt-in. `cardInit` opts in through a private helper precisely
+   * because the public method insists on a box; that helper must not leak the box-free path back
+   * out through `cardAssetOptIn`, or the partner could grow an orphan's holdings — and its
+   * sponsored MBR — without ever claiming it. The orphan is discarded afterwards.
+   */
+  test('cardAssetOptIn fails for an initialised but unclaimed account', async () => {
+    const init = await appClient.send.cardInit({
+      args: { asset: 0 },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(4_000),
+    })
+    const orphan = init.return!
+
+    await expect(
+      appClient.send.cardAssetOptIn({
+        args: { card: orphan, asset: fakeUSDC },
+        sender: owner.addr,
+        staticFee: AlgoAmount.MicroAlgos(3_000),
+      }),
+    ).rejects.toThrow('CARD_NOT_FOUND')
+
+    const discarded = await appClient.send.cardDiscard({
+      args: { card: orphan, asset: 0 },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(2_000),
+    })
+    expect(discarded.confirmation.poolError).toBe('')
+  })
+
+  /**
+   * Creates a card opted into FakeUSDC. The returned address is reused throughout the main
+   * spend/withdraw flow below, so this card is the primary subject of the asset-bearing tests.
    *
-   * This is also the ordering regression test for `cardCreate`: `cardAssetOptIn` asserts the
-   * card box exists, so the box write and the active-card increment must happen *before* the
-   * opt-in. If the opt-in is hoisted above the box write, the whole call reverts with
-   * CARD_NOT_FOUND and every assertion here fails. The holding and counter checks are what
-   * make the ordering observable rather than merely implied by the call not throwing.
+   * This is also the regression test for the opt-in inside `cardInit`. The public
+   * `cardAssetOptIn` asserts the card box exists, and at init time there is no box — nor can
+   * there be, since the box key is the address being minted. The opt-in therefore has to go
+   * through the box-free helper; routed through the public method instead, the whole call
+   * reverts with CARD_NOT_FOUND. The holding is checked *between* the two phases, before any box
+   * exists, and the opt-in MBR is verified to have been funded in the same call. The box and
+   * counter checks after the claim complete the picture.
    */
   test('Create new card with FakeUSDC', async () => {
     const { algorand } = fixture.context
 
     const activeBefore = await appClient.state.global.cardsActiveCount()
 
-    const result = await appClient.send.cardCreate({
-      args: {
-        cardOwner: user.addr.toString(),
-        asset: fakeUSDC,
-      },
+    const init = await appClient.send.cardInit({
+      args: { asset: fakeUSDC },
       sender: owner.addr,
       staticFee: AlgoAmount.MicroAlgos(5_000),
     })
-    expect(result.return).toBeDefined()
+    expect(init.return).toBeDefined()
 
-    newCardAddress = result.return!
+    newCardAddress = init.return!
+
+    // Opted in during init, with no box: a zero-balance holding exists (this throws if the opt-in
+    // inner transaction never ran), and the account is funded for exactly base MBR + one asset slot.
+    const holding = await algorand.asset.getAccountInformation(newCardAddress, fakeUSDC)
+    expect(holding.balance).toEqual(0n)
+    const info = await algorand.account.getInformation(newCardAddress)
+    expect(info.balance.microAlgos).toEqual(info.minBalance.microAlgos)
+    expect(info.minBalance.microAlgos).toEqual(200_000n)
+    expect((await appClient.state.box.cards.getMap()).has(newCardAddress)).toBe(false)
+
+    // CardAssetEnabled was emitted for the not-yet-card.
+    expect(
+      emitted(init.confirmation.logs, Buffer.concat([pubkey(newCardAddress), algosdk.encodeUint64(fakeUSDC)])),
+    ).toBe(true)
+
+    const claim = await appClient.send.cardClaim({
+      args: { cardOwner: user.addr.toString(), card: newCardAddress },
+      sender: owner.addr,
+      staticFee: AlgoAmount.MicroAlgos(1_000),
+    })
+    expect(claim.return).toBe(newCardAddress)
 
     // The card box was written, with the generated address stored back into it.
     const cardData = await appClient.send.getCardData({
@@ -396,11 +707,6 @@ describe('Auto-Draw Card', () => {
 
     // The active-card counter was incremented.
     expect(await appClient.state.global.cardsActiveCount()).toEqual(activeBefore! + 1n)
-
-    // The card really is opted into the asset: a zero-balance holding exists. This throws if
-    // the opt-in inner transaction never ran.
-    const holding = await algorand.asset.getAccountInformation(newCardAddress, fakeUSDC)
-    expect(holding.balance).toEqual(0n)
   })
 
   /**
@@ -433,12 +739,7 @@ describe('Auto-Draw Card', () => {
   test('cardAssetOptIn funds the opt-in MBR from the contract escrow', async () => {
     const { algorand } = fixture.context
 
-    const created = await appClient.send.cardCreate({
-      args: { cardOwner: user2.addr.toString(), asset: 0 },
-      sender: owner.addr,
-      staticFee: AlgoAmount.MicroAlgos(4_000),
-    })
-    const unfundedCard = created.return!
+    const unfundedCard = await createCard(user2.addr.toString(), 0)
 
     // The card sits exactly at its minimum balance: there is nothing spare to pay for an
     // asset slot with.
@@ -889,7 +1190,7 @@ describe('Auto-Draw Card', () => {
 
   /**
    * Closes the asset-free card and reclaims its minimum balance, completing the full
-   * lifecycle (create → fund → debit → recover → withdraw → disable asset → close) for the
+   * lifecycle (init → claim → fund → debit → recover → withdraw → disable asset → close) for the
    * primary FakeUSDC card.
    */
   test('Close card', async () => {
@@ -909,17 +1210,7 @@ describe('Auto-Draw Card', () => {
    * reused as the AutoDraw card in the integration tests further down.
    */
   test('Killswitch: create card for user (required to enable delegation)', async () => {
-    const result = await appClient.send.cardCreate({
-      args: {
-        cardOwner: user.addr.toString(),
-        asset: fakeUSDC,
-      },
-      sender: owner.addr,
-      staticFee: AlgoAmount.MicroAlgos(5_000),
-    })
-    expect(result.return).toBeDefined()
-
-    autoDrawCardAddress = result.return!
+    autoDrawCardAddress = await createCard(user.addr.toString(), fakeUSDC)
   })
 
   /**
@@ -1524,24 +1815,8 @@ describe('Auto-Draw Card', () => {
 
     await appClient.send.setWithdrawalTimeout({ args: { seconds: 0 } })
 
-    const [a, b] = [
-      await appClient.send.cardCreate({
-        args: { cardOwner: user.addr.toString(), asset: fakeUSDC },
-        sender: owner.addr,
-        staticFee: AlgoAmount.MicroAlgos(5_000),
-      }),
-      await appClient.send.cardCreate({
-        args: { cardOwner: user.addr.toString(), asset: fakeUSDC },
-        sender: owner.addr,
-        staticFee: AlgoAmount.MicroAlgos(5_000),
-      }),
-    ]
-
-    expect(a.return).toBeDefined()
-    expect(b.return).toBeDefined()
-
-    bindingCardA = a.return!
-    bindingCardB = b.return!
+    bindingCardA = await createCard(user.addr.toString(), fakeUSDC)
+    bindingCardB = await createCard(user.addr.toString(), fakeUSDC)
     expect(bindingCardA).not.toBe(bindingCardB)
 
     // Fund both cards identically so a wrong-card withdrawal would otherwise succeed.
@@ -1735,11 +2010,13 @@ describe('Auto-Draw Card', () => {
     expect(closed.confirmation.poolError).toBe('')
 
     expect(await appClient.state.global.cardsActiveCount()).toEqual(0n)
+    expect(await appClient.state.global.cardsPendingCount()).toEqual(0n)
   })
 
   /**
    * Final lifecycle step: the owner destroys the Main contract and reclaims any remaining
-   * balance, verifying the app can be cleanly deleted once all cards are closed.
+   * balance, verifying the app can be cleanly deleted once all cards are closed and nothing is
+   * left pending.
    */
   test('Destroy Contract', async () => {
     const result = await appClient.send.delete.destroy({

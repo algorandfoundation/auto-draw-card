@@ -66,9 +66,22 @@ const WithdrawalTypeApproved = 'approved'
 const WithdrawalTypePermissionLess = 'permissionless'
 
 // ========== Event Types ==========
+type CardInitialized = {
+  card: Account
+}
+
 type CardCreated = {
   cardOwner: Account
   card: Account
+}
+
+type CardDiscarded = {
+  card: Account
+}
+
+type CardClosed = {
+  card: Account
+  cardOwner: Account
 }
 
 type CardAssetEnabled = {
@@ -181,6 +194,9 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
 
   public cards_active_count = GlobalState<uint64>({ key: 'cfac' })
 
+  // Accounts produced by cardInit that have been neither claimed nor discarded
+  public cards_pending_count = GlobalState<uint64>({ key: 'cfpc' })
+
   // Seconds to wait
   public withdrawal_wait_time = GlobalState<uint64>({ key: 'wwt' })
 
@@ -241,6 +257,13 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   }
 
   /**
+   * Number of initialized-but-unclaimed accounts, treating an absent global as zero.
+   */
+  private pendingCards(): uint64 {
+    return this.cards_pending_count.hasValue ? this.cards_pending_count.value : 0
+  }
+
+  /**
    * Assert the transaction sender is an authorized withdraw operator.
    */
   private onlyWithdrawOperator(): void {
@@ -259,6 +282,21 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     this.onlyPartner()
     assert(this.cards(card).exists, 'CARD_NOT_FOUND')
 
+    this.assetOptIn(card, asset)
+  }
+
+  /**
+   * Opt `card` into `asset`, funding any minimum balance shortfall from the contract escrow.
+   *
+   * Shared by cardAssetOptIn and cardInit. It deliberately never touches the `cards` box: cardInit
+   * runs before the box exists and, more to the point, before the card address is known to the
+   * caller, so a box reference for it cannot be supplied. Callers are responsible for the
+   * partner and card-existence guards that make sense for them.
+   *
+   * @param card Card address
+   * @param asset Asset to opt-in to
+   */
+  private assetOptIn(card: Account, asset: Asset): void {
     // Reject a card already holding the asset rather than repeating the opt-in: the call would
     // change nothing, and rejecting keeps it from costing anything at all.
     const [, alreadyOptedIn] = op.AssetHolding.assetBalance(card, asset)
@@ -425,6 +463,7 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
     // puya-ts does not auto-zero-init GlobalState, so set the counters explicitly
     // at creation time.
     this.cards_active_count.value = 0
+    this.cards_pending_count.value = 0
     this.paused.value = false
 
     // Allow any app to read this app's boxes, so Killswitch can verify card ownership by
@@ -446,14 +485,16 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   }
 
   /**
-   * Destroy the smart contract, sending all Algo to the owner account. This can only be done if there are no active cards
+   * Destroy the smart contract, sending all Algo to the owner account. This can only be done if
+   * there are no active cards and no initialized-but-unclaimed accounts.
    */
   @abimethod({ allowActions: ['DeleteApplication'] })
   public destroy(): void {
     this.onlyOwner()
 
-    // There must not be any active card
+    // There must not be any active card, nor any account still waiting to become one
     assert(!this.cards_active_count.value, 'CARDS_STILL_ACTIVE')
+    assert(!this.pendingCards(), 'CARDS_STILL_PENDING')
 
     itxn
       .payment({
@@ -486,21 +527,16 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
   }
 
   /**
-   * Create a card. This generates a brand new account and funds the minimum balance requirement
-   * from the contract (owner-sponsored). Only the partner can call this function.
-   * @param cardOwner The card holder who will own/control the card
+   * First half of creating a card: generate a brand new account rekeyed to the contract, fund its
+   * minimum balance from the contract escrow (owner-sponsored) and, if an asset is provided,
+   * fund the opt-in MBR and opt the account into that asset. Only the partner can call this
+   * function.
+   *
    * @param asset Asset to opt-in to. 0 = No asset opt-in
-   * @returns Newly generated account used by their card
+   * @returns Newly generated account, to be passed to cardClaim
    */
-  public cardCreate(cardOwner: Account, asset: Asset): Account {
+  public cardInit(asset: Asset): Account {
     this.onlyPartner()
-
-    const cardData: CardData = {
-      owner: cardOwner,
-      address: Global.zeroAddress,
-      nonce: 0,
-      withdrawalNonce: 0,
-    }
 
     // Create a new account
     const compiledCard = compile(ControlledAddress)
@@ -509,9 +545,6 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
       clearStateProgram: compiledCard.clearStateProgram,
       onCompletion: OnCompleteAction.DeleteApplication,
     }).returnValue
-
-    // Update the card data with the newly generated address
-    cardData.address = cardAddr
 
     // Fund the account with a minimum balance
     const assetMbr: uint64 = asset.id ? Global.assetOptInMinBalance : 0
@@ -522,24 +555,95 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
       })
       .submit()
 
-    // Store new card along with Card Holder
-    this.cards(cardAddr).value = clone(cardData)
-
-    // Increment active cards
-    this.cards_active_count.value = this.cards_active_count.value + 1
-
-    // Opt-in to the asset if provided
+    // Opt-in to the asset if provided. The box-free helper, not cardAssetOptIn: that one asserts
+    // the card box exists, and there is no box yet.
     if (asset.id) {
-      this.cardAssetOptIn(cardAddr, asset)
+      this.assetOptIn(cardAddr, asset)
     }
 
-    emit<CardCreated>({
-      cardOwner: cardOwner,
+    // Count it as pending until cardClaim or cardDiscard settles it
+    this.cards_pending_count.value = this.pendingCards() + 1
+
+    emit<CardInitialized>({
       card: cardAddr,
     })
 
     // Return the new account address
     return cardAddr
+  }
+
+  /**
+   * Second half of creating a card: bind an account produced by `cardInit` to its holder. Writes
+   * the card box, counts the card as active and emits CardCreated. Only the partner can call this
+   * function.
+   *
+   * @param cardOwner The card holder who will own/control the card
+   * @param card Account returned by cardInit
+   * @returns The card address, now a live card
+   */
+  public cardClaim(cardOwner: Account, card: Account): Account {
+    this.onlyPartner()
+
+    // Assert card is owned by contract and not already claimed
+    assert(card.authAddress === Global.currentApplicationAddress, 'INVALID_CARD')
+    assert(!this.cards(card).exists, 'CARD_ALREADY_CLAIMED')
+
+    // Store new card along with owner
+    this.cards(card).value = {
+      owner: cardOwner,
+      address: card,
+      nonce: 0,
+      withdrawalNonce: 0,
+    }
+
+    // Pending becomes active
+    this.cards_pending_count.value = this.pendingCards() - 1
+    this.cards_active_count.value = this.cards_active_count.value + 1
+
+    emit<CardCreated>({
+      cardOwner: cardOwner,
+      card: card,
+    })
+
+    // Return the card account address
+    return card
+  }
+
+  /**
+   * Tear down an account produced by `cardInit` that was never claimed. Closes the account back
+   * to the contract, returning its sponsored minimum balance to the escrow, and emits
+   * CardDiscarded. Only the partner can call this function.
+   *
+   * @param card Account returned by cardInit
+   * @param asset Asset the account was initialized with. 0 = No asset
+   */
+  public cardDiscard(card: Account, asset: Asset): void {
+    this.onlyPartner()
+
+    // Same shape as cardClaim's guards, with the box check inverted: only something the contract
+    // controls but has not recorded as a card is eligible.
+    assert(card.authAddress === Global.currentApplicationAddress, 'INVALID_CARD')
+    assert(!this.cards(card).exists, 'CARD_ALREADY_CLAIMED')
+
+    if (asset.id) {
+      this.cardAssetCloseOut(card, asset)
+    }
+
+    itxn
+      .payment({
+        sender: card,
+        receiver: Global.currentApplicationAddress,
+        amount: 0,
+        closeRemainderTo: Global.currentApplicationAddress,
+      })
+      .submit()
+
+    // No longer pending
+    this.cards_pending_count.value = this.pendingCards() - 1
+
+    emit<CardDiscarded>({
+      card: card,
+    })
   }
 
   /**
@@ -572,6 +676,11 @@ export class Main extends classes(Ownable, Pausable, Recoverable) {
 
     // Decrement active cards
     this.cards_active_count.value = this.cards_active_count.value - 1
+
+    emit<CardClosed>({
+      card: card,
+      cardOwner: cardOwner,
+    })
   }
 
   /**

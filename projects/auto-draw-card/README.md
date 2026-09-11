@@ -25,7 +25,7 @@ The authoritative statement of this trust model is the comment block above `expo
 
 ## Concept
 
-This project is built around a **Main** contract that "generates" a new address for each card that's created. Every card is a rekeyed account controlled by the contract.
+This project is built around a **Main** contract that "generates" a new address for each card that's created. Every card is a rekeyed account controlled by the contract. Creating one is two calls, `cardInit` then `cardClaim` — see [Two-phase card creation](#two-phase-card-creation) for why.
 
 All minimum balance requirements (MBR) — box storage, account minimum balances and asset opt-in MBR — are **pre-funded by the contract owner**. Callers never attach MBR payments: `cardAssetOptIn` tops a card up from the contract escrow if it cannot cover the opt-in itself. MBR flows back the same way. When a card is closed, the freed MBR returns to the contract and the owner can reclaim it with `recoverAsset`. When a card opts out of an asset (`cardDisableAsset`), the freed opt-in MBR — along with any other surplus Algo on the card — is swept back to the contract too.
 
@@ -38,7 +38,7 @@ Two auxiliary contracts support an automated draw ("AutoDraw") flow on top of th
 ## Roles
 
 - **Owner** — administers the contract: recovers cards, authorizes withdraw operators, configures the contract (partner address, omnibus address, killswitch app, withdrawal timeout, withdrawal public key), and reclaims MBR. Inherited from `Ownable` and transferable via `transferOwnership`.
-- **Partner** — operates the card lifecycle: creates/closes cards and opts cards in/out of assets. Set by the owner via `setPartnerAddress`.
+- **Partner** — operates the card lifecycle: initialises, claims, discards and closes cards, and opts cards in/out of assets. Set by the owner via `setPartnerAddress`.
 - **Withdraw operator** — debits cards to the omnibus address via `cardDebit`. Authorized and revoked by the owner (`addWithdrawOperator` / `removeWithdrawOperator`), so debit processing can run from an operational key that holds no other privileges.
 - **Pauser** — can `pause`/`unpause` the contract, halting debits. Inherited from `Pausable` and updatable via `updatePauser`.
 - **Card holder** — the account assigned as a card's `owner`. Can close the card, opt the card out of assets, and initiate/cancel/execute withdrawals.
@@ -59,7 +59,7 @@ Allows the owner to update the contract.
 
 #### destroy()void
 
-Destroy the contract, returning all Algo to the owner. Only possible when there are no active cards.
+Destroy the contract, returning all Algo to the owner. Only possible when there are no active cards (`CARDS_STILL_ACTIVE`) and no accounts left behind by `cardInit` without a `cardClaim` (`CARDS_STILL_PENDING`, tracked by `cards_pending_count`). The latter are rekeyed to the application, so once it is deleted nothing can sign for them again and their balance is stranded; the partner settles them with `cardClaim` or `cardDiscard` first.
 
 #### transferOwnership(address)void / owner()address
 
@@ -107,9 +107,28 @@ Owner-only. Revoke a withdraw operator, deleting its box and releasing the MBR b
 
 ### Cards
 
-#### cardCreate(address,uint64)address
+#### Two-phase card creation
 
-Partner-only. Generates a brand new rekeyed account for the given card holder and funds its minimum balance from the contract. If an asset is provided (non-zero), also funds the asset opt-in MBR and opts the card into that asset. Returns the new card address.
+A card's box in `cards` is keyed by the card's address, and that address does not exist until the account has been created — it is the app address of a throwaway inner application, derived from a chain-wide app-id counter. Every box a transaction touches must be named in its box references up front, so a single call that mints the account _and_ writes its box needs a reference to a key the caller cannot know yet. Resolving it by simulating the call first works in a quiet test, but under load any application created between the simulation and the real transaction shifts the counter, the address, and the box key, and the call fails.
+
+Creation is therefore split at exactly that point:
+
+1. `cardInit` does everything that needs no box: it creates the account, rekeys it to the contract, funds it, and opts it into the asset. It returns the address and emits `CardInitialized`.
+2. `cardClaim` does everything that needs one: given the now-known address, it writes the box, counts the card as active and emits `CardCreated`.
+
+Between the two calls the account is a **contract-controlled account that is not a card**: it has no holder, `getCardData` rejects it, and it is not in `cards_active_count`. It is counted in `cards_pending_count`, which is the only thing the contract knows about it and what stops `destroy` from stranding it. If the partner never follows up — a crash between the calls, or a return value it never read — `cardDiscard` closes the account and returns its funding to the escrow. Nothing else can reach it, so the partner should treat init-without-claim as a condition to reconcile; a non-zero `cards_pending_count` with nothing in flight is the signal.
+
+#### cardInit(uint64)address
+
+Partner-only. Generates a brand new account rekeyed to the contract and funds its minimum balance from the contract escrow. If an asset is provided (non-zero), also funds the asset opt-in MBR and opts the account into that asset. Increments `cards_pending_count`, emits `CardInitialized` (and `CardAssetEnabled` if an asset was given) and returns the new address, which must be passed to `cardClaim`. No box is written and the account is not yet a card.
+
+#### cardClaim(address,address)address
+
+Partner-only. Binds an account returned by `cardInit` to its card holder: writes the card box (`owner`, `address`, nonces at 0), moves the account from `cards_pending_count` to `cards_active_count` and emits `CardCreated`. Args: `cardOwner, card`. The account must be rekeyed to the contract (`INVALID_CARD` otherwise) and must not already be a card (`CARD_ALREADY_CLAIMED`); a closed card no longer exists on the ledger and cannot be claimed again. Returns the card address.
+
+#### cardDiscard(address,uint64)void
+
+Partner-only. Tears down an account returned by `cardInit` that was never claimed: closes it out of the given asset (if non-zero — the asset it was initialised with, since an account still holding an ASA cannot be closed), closes the account back to the contract, decrements `cards_pending_count` and emits `CardDiscarded` (plus `CardAssetDisabled` for the close-out). Args: `card, asset`. Refuses anything not rekeyed to the contract (`INVALID_CARD`) and any live card (`CARD_ALREADY_CLAIMED`) — those go through `cardClose`. Up to three inner transactions, so budget roughly 3_000 µAlgos of extra fee.
 
 #### cardAssetOptIn(address,uint64)void
 
@@ -117,7 +136,7 @@ Partner-only. Opts a card into an asset, funding any shortfall in the card's min
 
 #### cardClose(address)void
 
-Partner or card holder. Closes the card account back to the contract and deletes its box, returning all balances and MBR to the contract. Also drops any pending withdrawal request that targets this card, so the request box cannot outlive the card it points at. The card must already be opted out of every asset (Algorand forbids closing an account that still holds an ASA), which is why AutoDraw delegation cleanup lives in `cardDisableAsset` rather than here.
+Partner or card holder. Closes the card account back to the contract and deletes its box, returning all balances and MBR to the contract, and emits `CardClosed`. Also drops any pending withdrawal request that targets this card, so the request box cannot outlive the card it points at. The card must already be opted out of every asset (Algorand forbids closing an account that still holds an ASA), which is why AutoDraw delegation cleanup lives in `cardDisableAsset` rather than here.
 
 #### cardRecover(address,address)void
 
@@ -160,6 +179,27 @@ Card holder. Executes a pending permissionless withdrawal once the wait time has
 #### withdrawPermissioned(address,uint64,uint64,uint64,uint64,byte[64])void
 
 Card holder. Executes a withdrawal before the wait time elapses, authorized by an ed25519 signature from the withdrawal public key. Args: `card, asset, amount, expiresAt, nonce, signature`.
+
+### Events
+
+Every state change emits an [ARC-28](https://arc.algorand.foundation/ARCs/arc-0028) event; [smart_contracts/subscriber/subscriber.ts](./smart_contracts/subscriber/subscriber.ts) subscribes to all of them from the app spec.
+
+| Event                                                       | Emitted by                                     | Fields                                                              |
+| ----------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
+| `CardInitialized`                                           | `cardInit`                                     | `card`                                                              |
+| `CardCreated`                                               | `cardClaim`                                    | `cardOwner, card`                                                   |
+| `CardDiscarded`                                             | `cardDiscard`                                  | `card`                                                              |
+| `CardClosed`                                                | `cardClose`                                    | `card, cardOwner`                                                   |
+| `CardRecovered`                                             | `cardRecover`                                  | `card, oldCardOwner, newCardOwner`                                  |
+| `CardAssetEnabled`                                          | `cardAssetOptIn`, `cardInit`                   | `card, asset`                                                       |
+| `CardAssetDisabled`                                         | `cardDisableAsset`, `cardDiscard`              | `card, asset`                                                       |
+| `Debit`                                                     | `cardDebit`                                    | `card, asset, amount, nonce, reference`                             |
+| `WithdrawalRequest`                                         | `withdrawalRequest`                            | `card, recipient, asset, amount, createdAt, nonce`                  |
+| `WithdrawalRequestCancelled`                                | `withdrawalCancel`, `cardClose`, `cardRecover` | same as `WithdrawalRequest`                                         |
+| `Withdrawal`                                                | `withdraw`, `withdrawPermissioned`             | `card, recipient, asset, amount, createdAt, expiresAt, nonce, type` |
+| `OwnershipTransferred`, `Pause`, `Unpause`, `PauserChanged` | the `Ownable` / `Pausable` mixins              | —                                                                   |
+
+A card is the subject of exactly one `CardCreated`, at `cardClaim`; an account that only ever saw `CardInitialized` is not a card and ends in either `CardCreated` or `CardDiscarded`.
 
 ## Killswitch contract
 
@@ -211,6 +251,7 @@ classDiagram
     MainContract : +box withdrawals
     MainContract : +box withdraw_operators
     MainContract : +int cards_active_count
+    MainContract : +int cards_pending_count
     MainContract : +int withdrawal_wait_time
     MainContract : +bytes withdrawal_pubkey
     MainContract : +address partner_address
@@ -241,7 +282,9 @@ classDiagram
     }
 
     class Partner {
-        cardCreate()
+        cardInit()
+        cardClaim()
+        cardDiscard()
         cardAssetOptIn()
         cardClose()
         cardDisableAsset()
@@ -283,13 +326,18 @@ sequenceDiagram
     Partner->>Contract: setKillswitchApp()
     Partner->>Contract: addWithdrawOperator()
     Partner->>Contract: fund MBR pool
-    Partner->>Contract: cardCreate(cardHolder, asset)
+    Partner->>Contract: cardInit(asset)
     activate Contract
     create participant Card
     Contract-->>Card: Create Card
     Card-->>Contract: Rekey to Contract
     Contract-->>Card: Fund MBR + OptIn MBR
     Card-->>Card: OptIn Asset
+    Contract-->>Partner: card address
+    deactivate Contract
+    Partner->>Contract: cardClaim(cardHolder, card)
+    activate Contract
+    Contract-->>Contract: write card box
     deactivate Contract
     User->>Card: Axfer (Deposit)
     User->>Merchant: *taps card*
@@ -347,7 +395,11 @@ pnpm test                 # run the test suite against LocalNet
 
 Other scripts: `pnpm lint`, `pnpm check-types`, `pnpm format`, and `pnpm deploy` (deploys via `smart_contracts/index.ts`). See `package.json` for the full list.
 
-Note that a method's JSDoc becomes its `desc` in the ARC-56 app spec, so editing a doc comment changes the committed artifacts and typed clients — rerun `pnpm build` alongside it. Plain `//` comments do not.
+### Deploying and updating
+
+`pnpm deploy` runs each contract's `deploy-config.ts`. The Main config creates the app when the deployer has none and otherwise appends a new app on a program change (`onUpdate: 'append'`, `onSchemaBreak: 'append'`); it does not update a live app in place.
+
+Note on state schema: `cards_pending_count` was added after the first deployments, so the current program needs one more global uint than an older app was created with. AVM 13 allows an `UpdateApplication` to raise an app's global and local state allocation, but AlgoKit's deployer (algokit-utils 9.x) cannot express that yet, so an existing app has to be updated by hand: send an `UpdateApplication` calling `update()` as the owner, carrying the new programs, the enlarged schema and the app's extra program pages. The contract reads the new global migration-safely (`pendingCards()` treats an absent value as zero), because an update is approved by the outgoing program and nothing can initialise the global during the update itself. Nothing is in production yet, so this is acceptable until the deployer supports schema growth natively.
 
 ### Project layout
 
@@ -360,4 +412,4 @@ Note that a method's JSDoc becomes its `desc` in the ARC-56 app spec, so editing
 
 ### Testing
 
-Tests run with [vitest](https://vitest.dev/). The end-to-end suite ([smart_contracts/main/contract.e2e.spec.ts](./smart_contracts/main/contract.e2e.spec.ts)) deploys the contracts to `algokit localnet` and exercises the full card lifecycle (create, debit, withdraw, AutoDraw, recover) on a real network, so LocalNet must be running before `pnpm test`.
+Tests run with [vitest](https://vitest.dev/). The end-to-end suite ([smart_contracts/main/contract.e2e.spec.ts](./smart_contracts/main/contract.e2e.spec.ts)) deploys the contracts to `algokit localnet` and exercises the full card lifecycle (init, claim, discard, debit, withdraw, AutoDraw, recover) on a real network, so LocalNet must be running before `pnpm test`.

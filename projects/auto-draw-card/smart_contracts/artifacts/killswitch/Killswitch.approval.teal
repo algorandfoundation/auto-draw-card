@@ -320,6 +320,12 @@ transferOwnership:
     // this.onlyOwner()
     callsub onlyOwner
     // smart_contracts/roles/ownable.algo.ts:94
+    // assert(newOwner !== Global.zeroAddress, 'ADDRESS_NOT_ALLOWED')
+    dup
+    global ZeroAddress
+    !=
+    assert // ADDRESS_NOT_ALLOWED
+    // smart_contracts/roles/ownable.algo.ts:95
     // this._transferOwnership(newOwner)
     callsub _transferOwnership
     // smart_contracts/roles/ownable.algo.ts:91
